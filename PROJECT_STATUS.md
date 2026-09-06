@@ -57,7 +57,7 @@ ros2 launch elevation_mapping_cupy synthetic_depth_demo.launch.py launch_rviz:=f
 
 ## 目标与待办
 
-- [x] 确认用户现有系统已能运行，记录 Humble 与外部 RViz 使用方式。
+- [x] 确认用户现有系统已能运行，记录 Humble 与外部 RViz 使用方式。证据与使用方法已保存于 `3d5e115`（`docs: record workspace handoff and host RViz procedure`）。
 - [ ] 设计最小几何测试：人工生成已知角度平面，不依赖 Gazebo。
 - [ ] 确认如何独立调用现有局部平面拟合实现及必要依赖。
 - [ ] 检验水平面、X/Y 方向斜坡、负向斜坡的法向量、坡度与拟合误差。
@@ -119,6 +119,14 @@ ros2 launch elevation_mapping_cupy synthetic_depth_demo.launch.py launch_rviz:=f
 - 对应提交说明：`docs: record workspace handoff and host RViz procedure`。
 
 ## 后续记录规则
+
+### 2026-09-06：完成目标后自动提交
+
+- [x] 在 `AGENTS.md` 明确每完成并验证一个目标就自动本地提交，包含状态和必要经验记录，不再询问是否提交。
+- 修改文件：`AGENTS.md`、`PROJECT_STATUS.md`；为已有环境确认目标关联 `3d5e115`，不重复制造 baseline。
+- 验证：检查新增规则与用户要求一致，提交前运行 `git diff --check` 并核对暂存范围，提交后核对日志和剩余改动。本次不涉及代码，不运行构建或算法测试。
+- 对应提交说明：`docs: require a git checkpoint for each completed goal`。
+- 下一步：回到几何算法最小独立验证方案。
 
 每项工作记录：目标、改动、验证命令、实际结果、剩余问题以及对应 Git 提交。
 未运行的测试明确标为未运行；不把预计结果记录为实测结果。
