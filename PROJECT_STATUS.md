@@ -114,7 +114,7 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 - 主机指纹记录 `/tmp/elevation-map-host-known-hosts` 是临时文件，丢失后重新核实主机指纹并登记。
 - 原嵌套 Git 备份 `/tmp/elevation-map-git-backup.MmJenz/original.git` 也是临时备份，不能当作长期备份；新仓库 baseline 已包含当前源码。
 - 已验证：SSH 登录主机、主机 RViz2 OpenGL 初始化、受控结束与无残留进程。另已验证：17 组局部拟合数值测试。另已验证：主机订阅测试地形三条 GridMap、逐格核对全部三层，以及 RViz 三图和标签显示。未验证：完整建图链路几何精度、轮足机器人的通过能力。
-- 可视化交付时保留容器发布程序（当时 PID 358854）和主机 RViz（当时 PID 971428）。PID 可能过期，操作前先核对命令；不要清理用户其他节点。停止容器发布程序用对应终端 Ctrl+C，主机窗口直接关闭。
+- 用户要求暂停查看后，已停止本次容器发布程序（PID 358854）并关闭主机 RViz（PID 971428）；操作前核对了各自命令行，未处理其他节点。需要再次查看时按 README 重新启动。
 
 ## 阶段记录
 
@@ -170,3 +170,8 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 - 独立审阅：没有阻塞性问题；按建议补充了 DDS 高程数值核验，并在主机执行通过。
 - 对应提交说明：`feat: visualize validated terrain geometry in host RViz`。
 - 下一步：接入实际 elevation map 后验证融合/滤波误差，不将测试地图显示成功当作完整系统通过。
+
+### 2026-09-06：停止可视化演示
+
+- 按用户要求，核对命令行后停止本次测试发布程序并关闭主机 RViz；未修改代码或其他节点。
+- 对应提交说明：`docs: record geometry demo shutdown`。
