@@ -4,7 +4,7 @@
 
 ## 接手时先看这里
 
-已完成工作空间 baseline、主机 RViz2 启闭验证，以及现有局部平面拟合数值函数的最小精度测试（17 组及 3 种故障注入）。生产算法没有改动，尚未发布 slope/roughness 层或测试点云融合链路。下一步设计几何层接入与无效格处理，随后验证完整链路，暂不接入 MPPI。
+已完成工作空间 baseline、主机 RViz2 启闭验证，以及现有局部平面拟合数值函数的最小精度测试（17 组及 3 种故障注入）。生产算法没有改动；测试地形现已发布 slope/roughness 并在主机 RViz 显示，主机 DDS 实收数值已核验。尚未接入生产高程地图或测试点云融合链路；下一步处理该链路，暂不接入 MPPI。
 
 阅读顺序：`AGENTS.md`（范围与规则）→ 本文件（进度与下一步）→ `EXPERIENCES.md` 的相关条目（验证过的方法）。只读下一步直接涉及的源码，不要重新扫描大量文件。
 
@@ -63,7 +63,8 @@ ros2 launch elevation_mapping_cupy synthetic_depth_demo.launch.py launch_rviz:=f
 - [x] 检验水平面、X/Y 方向斜坡、负向斜坡的法向量、坡度与拟合误差。
 - [x] 记录真值、误差、有效格子数、窗口大小和地图分辨率；容差在执行前明确。
 - [x] 用解析真值验证 10 mm、20 mm 非零 roughness，并检查带起伏斜坡的拟合角度。以上数值验证统一保存于 `test: validate original plane slope and roughness accuracy`。
-- [ ] 几何测试通过后，增加 slope（度）和 roughness（平面距离 RMS，米）的 GridMap 输出并在主环境 RViz 查看。
+- [x] 为已验证的测试地形增加 slope（度）和 roughness（平面距离 RMS，米）的 GridMap 输出并在主环境 RViz 查看。提交说明：`feat: visualize validated terrain geometry in host RViz`。
+- [ ] 将相同几何指标接入生产高程地图；当前三个显示话题仅是数学测试地形，不代表原建图输出。
 - [ ] 使用同样斜坡的假点云测试完整建图流程，区分几何计算与融合/滤波误差。
 - [ ] 后续按四轮足机器人的轮式/迈步模式讨论通过条件，暂不把现有卷积分数视为已适配的通行判据。
 
@@ -102,7 +103,7 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 
 1. 先确认要接入的几何层接口，保持同一误差定义；设计无效格掩码，不能将原函数 `1e30` 哨兵对应的向上法向量当作平地。
 2. 检查地图格索引与世界坐标映射，确保接入时仍保持法向量方向正确；局部窗口尺寸应明确以米和格数共同记录。
-3. 再实现 slope（度）和 roughness（正交平面距离 RMS，米）层，并在主机 RViz 查看。
+3. 测试地形的 slope/roughness 发布与 RViz 已完成，见下方运行入口；生产地图接入仍待实现。
 4. 用已知地形点云验证融合、滤波后的整条链路误差。数学夹具不代表实际传感器或机器人能力；不训练网络、不改 MPPI。
 
 ## 环境恢复与验证边界
@@ -112,8 +113,8 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 - 专用私钥 `/root/.ssh/elevation_host_rviz` 不在 Git 内。容器删除后不保证保留，恢复时需安全恢复或重新生成密钥并授权公钥；不要提交私钥或密码。
 - 主机指纹记录 `/tmp/elevation-map-host-known-hosts` 是临时文件，丢失后重新核实主机指纹并登记。
 - 原嵌套 Git 备份 `/tmp/elevation-map-git-backup.MmJenz/original.git` 也是临时备份，不能当作长期备份；新仓库 baseline 已包含当前源码。
-- 已验证：SSH 登录主机、主机 RViz2 OpenGL 初始化、受控结束与无残留进程。另已验证：17 组局部拟合数值测试。未验证：该次窗口中的地图订阅效果、完整建图链路几何精度、轮足机器人的通过能力。
-- 最近完成的数值测试进程已结束，没有启动应持续运行的任务；之前 RViz2 测试已结束。容器/主机上用户自行启动的其他节点状态未检查，接手时不要假定它们存在或停止。
+- 已验证：SSH 登录主机、主机 RViz2 OpenGL 初始化、受控结束与无残留进程。另已验证：17 组局部拟合数值测试。另已验证：主机订阅测试地形三条 GridMap、逐格核对全部三层，以及 RViz 三图和标签显示。未验证：完整建图链路几何精度、轮足机器人的通过能力。
+- 可视化交付时保留容器发布程序（当时 PID 358854）和主机 RViz（当时 PID 971428）。PID 可能过期，操作前先核对命令；不要清理用户其他节点。停止容器发布程序用对应终端 Ctrl+C，主机窗口直接关闭。
 
 ## 阶段记录
 
@@ -156,3 +157,16 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 - 首轮构建有 Eigen ARM NEON 头文件警告；正式复跑将第三方 Eigen 目录标为系统头文件，保留本地代码 `-Wall -Wextra` 检查。没有修改 Eigen 或生产算法。
 - 边界：未运行 colcon 全包构建、ROS 话题或新的 RViz 实验；本阶段构建的是独立数值验证程序。
 - 对应提交说明：`test: validate original plane slope and roughness accuracy`。
+
+### 2026-09-06：测试地形 GridMap 与主机 RViz 可视化
+
+- 完成目标：让用户直接查看已验证几何指标。原生产地图与算法保持不变，当前只是数学测试夹具的 ROS 显示。
+- 文件：`src/terrain_test/geometry_validation/geometry_demo.py`、`geometry_demo.rviz`、`test_geometry_demo.py`、`check_demo_topics.py`、同目录 README，以及状态/经验记录。
+- 构建和测试：加载 Humble 后运行 `python3 -m unittest discover -s src/terrain_test/geometry_validation -p test_geometry_demo.py`，真实编译 Eigen 适配器，3 项通过（指标/边界、非方阵消息序列化、无效拟合）。新增模块前测试因模块不存在失败，实现后通过。
+- 运行：Domain 42、`rmw_cyclonedds_cpp`；容器执行 `python3 src/terrain_test/geometry_validation/geometry_demo.py`，以2 Hz发布；主机执行 `rviz2 -d /tmp/geometry_demo.rviz`。完整重现步骤见同目录 README。
+- 实际 DDS 验证：通过 SSH 在主机执行 `/tmp/check_demo_topics.py`，三个话题分别收到3层，每图6084个内部格子的高程、坡度和粗糙度均符合数学真值。
+- 实际显示：主机 RViz 日志 OpenGL 4.6 初始化成功；截图核对 Global Status OK、3幅彩色图和地形标签。默认从屏幕左至右为 roughness、slope、height。蓝低红高。
+- 截图：`build/geometry_validation/rviz_demo.png`（编译目录被忽略，不在 Git 中；需要时重新截图）。窗口与发布程序已保留供用户查看。
+- 独立审阅：没有阻塞性问题；按建议补充了 DDS 高程数值核验，并在主机执行通过。
+- 对应提交说明：`feat: visualize validated terrain geometry in host RViz`。
+- 下一步：接入实际 elevation map 后验证融合/滤波误差，不将测试地图显示成功当作完整系统通过。

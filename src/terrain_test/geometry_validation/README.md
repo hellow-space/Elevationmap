@@ -59,4 +59,57 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 
 ## 结果与下一步
 
-结果以 JSON 快照为准。尚未验证点云融合、滤波对指标的影响，也未发布 slope/roughness 层或判断机器人能否通过。后续应先处理算法接口和无效格掩码，再做完整建图链路测试。
+数值结果以 JSON 快照为准。下述测试地形可视化已发布 slope/roughness 层；生产建图节点尚未接入，未验证点云融合、滤波对指标的影响，也未判断机器人能否通过。
+
+## 在主机 RViz 看测试地形
+
+这是上述数学测试地形的可视化，不是传感器建图结果。四块地形：平地、15° 光滑斜坡、RMS 10 mm 和 20 mm 的起伏面。C++ 原函数先计算一次，容器以 2 Hz 重复发布；不需要启动原来的 synthetic_depth_demo，也不会改它的地图话题。
+
+容器终端：
+
+```bash
+cd /root/elevation_map
+source /opt/ros/humble/setup.bash
+export ROS_DOMAIN_ID=42
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+python3 src/terrain_test/geometry_validation/geometry_demo.py
+```
+
+脚本启动时自动编译现有 C++ 测试适配器，并打印四块地形的平均指标。保持终端运行，Ctrl+C 停止。
+
+将本目录 `geometry_demo.rviz` 复制到主机（本次已放在 `/tmp/geometry_demo.rviz`）。在主机终端执行：
+
+```bash
+source /opt/ros/humble/setup.bash
+export ROS_DOMAIN_ID=42
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+rviz2 -d /tmp/geometry_demo.rviz
+```
+
+容器通过 SSH 启动主机 RViz 的认证与显示配置见根目录 `EXPERIENCES.md`。`/tmp` 配置清理后需重新复制。
+
+默认三个显示均启用，Fixed Frame 为 `map`。每幅图都有相同四块地形，并用高程作为真实显示高度，仅改变颜色来源；发布时将三个图的中心沿 Y 分别移动 +5、0、-5 m，以并排比较，不表示真实地形位置。
+
+| 显示 / 话题 | 颜色层和范围 |
+|---|---|
+| Height / `/terrain_geometry/elevation` | elevation：−0.3 到 +0.3 m |
+| Slope / `/terrain_geometry/slope` | slope：0 到 20° |
+| Roughness / `/terrain_geometry/roughness` | roughness：0 到 0.02 m |
+
+蓝色代表范围低端、红色代表高端。默认视角从屏幕左到右是 roughness、slope、height，以图中标题为准。平地和光滑坡的 roughness 应接近零；10/20 mm 起伏面在 roughness 图中颜色不同，但其拟合平面均近水平，因此 slope 接近零。不要将这里的坡度大小当作台阶检测。
+
+- `/terrain_geometry/labels` 是地形名称和指标标题；标签里的角度/毫米数表示数学真值。
+- 每条 GridMap 都包含 `elevation`、`slope`、`roughness` 三层。三个话题只是显示位置不同。
+- 91×91 地图、0.05 m 分辨率；四个41×41地形块之间留空。只计算完整3×3窗口，边界/缺失格/退化拟合的几何层保持 NaN，不将未知格填成安全平地。
+- 当前窗口覆盖0.15×0.15 m格面积，最外侧样本中心间距0.10 m。显示网格使用 column-major 数据，行沿负X、列沿负Y。
+
+消息与指标测试（会编译 C++）：
+
+```bash
+source /opt/ros/humble/setup.bash
+python3 -m unittest discover -s src/terrain_test/geometry_validation -p test_geometry_demo.py
+```
+
+容器或主机均可执行 `check_demo_topics.py`（主机需先复制脚本），环境保持上述 Domain 和 RMW。它真正通过 DDS 订阅三个消息，核对布局、偏移和全部6084个内部格子的高程/坡度/粗糙度；缺失话题20秒超时退出非零。
+
+本次已在主机执行该检查并通过，也实际截图确认 RViz 的三个 GridMap 显示及标签。未测试完整点云融合链路。

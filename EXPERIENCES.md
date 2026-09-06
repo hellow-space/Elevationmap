@@ -74,3 +74,26 @@ SSH 返回主机名 `nvidia-desktop`；RViz 日志出现 `OpenGl version: 4.6 (G
 
 **避免：**
 不要用角度大小测试代替法向量方向测试；不要将不足三个有效点或共线输入的 `1e30` 无效哨兵解释为平地。不要把高程标准差当作正交平面 RMS。已验证的 15° 基础坡面加竖直起伏样本，其最佳拟合角约 15.84248°，并非求解器数值错误；应区分基础地形角度和拟合指标真值。
+
+## 容器 GridMap 在主机 RViz 的实收与显示验证
+
+**日期：** 2026-09-06
+**相关模块：** terrain_test / grid_map_msgs / grid_map_rviz_plugin / DDS
+
+**现象：**
+需要在主机查看容器计算的 slope/roughness，单独成功打开 RViz 不能证明数据已到达。
+
+**原因：**
+两端必须使用可通信的 ROS 环境，GridMap 布局、指标单位和颜色范围也必须一致。
+
+**解决方法：**
+本次验证两端使用 Humble、`ROS_DOMAIN_ID=42`、`RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`。主机已有 GridMap 插件。矩阵使用 column-major，维度标签为 column_index/row_index，stride 分别为 rows*cols/rows，零缓冲起始索引；length_x=rows*r、length_y=cols*r，与原平面函数的负X/负Y索引约定一致。
+
+**验证：**
+`test_geometry_demo.py` 的非方阵序列化、指标与 NaN 测试3项通过。主机 `check_demo_topics.py` 实际收到三个 GridMap 并逐格核对3层。RViz 截图确认3幅图与标签，Global Status OK。脚本和配置在 `src/terrain_test/geometry_validation/`。
+
+**适用范围：**
+当前为静态数学地形显示，三个图的 Y 偏移仅用于并排比较。主机配置和核验脚本曾复制到 `/tmp`，清理后需从仓库重新复制。
+
+**避免：**
+不要只看启动日志就声称地图显示成功。不要自动缩放每幅图的颜色而失去指标对比：本例 slope 固定0–20°、roughness 固定0–0.02 m，蓝低红高。只计算完整3×3窗口，边界/缺失/退化拟合保留 NaN，不填零。
