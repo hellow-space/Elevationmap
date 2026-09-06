@@ -1,0 +1,30 @@
+# ROS / colcon generated output (at any depth)
+build/
+install/
+log/
+logs/
+
+# Python generated files and local environments
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+compile_commands.json
+
+# Editor / OS temporary files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
