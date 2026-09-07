@@ -120,3 +120,26 @@ variance为高度估计方差m²，需结合有效高程格使用；不是roughn
 
 **避免：**
 不要删掉error_counting_kernel等看似与可通行性有关的核函数，它还更新融合所需点计数。不要期待有限先验下三帧融合就与数学平面完全重合，应测收敛与方差变化。不要把同名raw理解为关闭所有测量过滤/可见性清理。
+
+## 嵌套 Git 元数据移除后的上游来源核实
+
+**日期：** 2026-09-07
+**相关模块：** elevation_mapping_cupy / Git provenance
+
+**现象：**
+package 原有 `.git` 已移出工作区，临时备份也已消失；统一仓库没有 remote，直接查看当前 `main` 会误以为 package 来自官方 `main`。普通目录 diff 又因本地 CRLF 与官方 LF 把大量未改文件误报为修改。
+
+**原因：**
+统一仓库分支只描述后续工作区版本管理，不能保留原嵌套仓库的 upstream/tracking 信息；Git 的普通内容比较会把行尾编码纳入差异。
+
+**解决方法：**
+交叉使用已记录的旧 HEAD、Shell 历史中的完整 clone 命令、官方仓库对该提交的可达分支，再从该提交导出干净树。使用 `git diff --ignore-space-at-eol --no-index` 比较，并排除 `.pytest_cache`、`__pycache__` 等生成物；再将统一仓库 baseline→当前 HEAD 的差异单独叠加，区分接手前与接手后的修改。
+
+**验证：**
+本次三项证据一致指向官方 `leggedrobotics/elevation_mapping_cupy` 的 `ros2` 分支和提交 `deb1c86789a6873d48c28938d179b980858fd1bb`。忽略行尾后，baseline 相对官方仅有两个 synthetic demo 文件的实质修改；当前新增 raw 模式后，共有 12 个非缓存文件存在实质差异。
+
+**适用范围：**
+适用于源码已纳入新的父仓库、原嵌套 Git 元数据不可用，但仍有旧 HEAD、命令历史或其他来源证据的追溯调查。
+
+**避免：**
+不要用父仓库当前分支名推断子目录原来的上游分支，也不要把 CRLF/LF 或 Python 缓存造成的目录差异算成算法改动。

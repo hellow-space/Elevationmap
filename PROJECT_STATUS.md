@@ -69,6 +69,8 @@ ros2 launch elevation_mapping_cupy synthetic_depth_demo.launch.py launch_rviz:=f
 
 ## 目标与待办
 
+- [x] 核实 `elevation_mapping_cupy` 的官方来源、原始克隆分支与当前核心差异。原始来源为 `leggedrobotics/elevation_mapping_cupy` 的 `ros2` 分支，浅克隆 HEAD 为 `deb1c86789a6873d48c28938d179b980858fd1bb`；差异边界见阶段记录。提交说明：`docs: record elevation mapping upstream provenance`。
+
 - [x] 提供无神经网络的原始融合高程/方差模式，并完成真实 GPU、ROS 话题与主机 RViz 验证。提交说明：`feat: add raw elevation mode without neural traversability`。
 
 - [x] 确认用户现有系统已能运行，记录 Humble 与外部 RViz 使用方式。证据与使用方法已保存于 `3d5e115`（`docs: record workspace handoff and host RViz procedure`）。
@@ -202,3 +204,15 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 - 失败教训：3帧融合尚有约1.5mm先验残差；检查融合公式后增加重复观测并验证收敛、方差下降，保留1mm精度门槛。并非原平面拟合测试失败。
 - 原始模式不是裸点云，不等于所有过滤均关闭；variance不是roughness。当前仍未在生产地图发布slope/roughness。
 - 提交说明：`feat: add raw elevation mode without neural traversability`。
+
+### 2026-09-07：官方分支与本地核心差异核实
+
+- 完成目标：确认 `src/elevation_mapping_cupy` 的上游来源、原克隆分支和当前源码相对官方克隆点的实质差异。
+- 来源证据：Shell 历史保留命令 `git clone -b ros2 --depth 1 https://github.com/leggedrobotics/elevation_mapping_cupy.git`；旧嵌套仓库移除前记录的 HEAD 为 `deb1c86`。从官方仓库重新获取后确认完整提交为 `deb1c86789a6873d48c28938d179b980858fd1bb`（`Trim torch CUDA cache in elevation mapping`），由官方 `ros2` 分支包含；该提交自己的 README 也将当前分支标为 `ros2`。
+- 比较方法：从官方提交导出干净源码，并分别与统一仓库基线 `608adab`、当前 HEAD 比较。由于本地广泛存在 CRLF、官方快照使用 LF，比较使用 `git diff --ignore-space-at-eol --no-index` 排除换行符假差异，同时排除 `.pytest_cache` 和 `__pycache__` 生成物。
+- 基线结果：`608adab` 相对官方 `deb1c86` 只有 `synthetic_depth_demo.launch.py` 和 `synthetic_pointcloud_tf_publisher.py` 两个实质差异，用于默认关闭容器 RViz、增加 map→odom 选项、机器人运动和动态障碍测试点云；生产高程融合、CUDA kernels、traversability filter、plugins 和 plane segmentation 算法一致。
+- 当前结果：相对官方克隆点共有 12 个非缓存文件存在实质差异，其中 7 个已修改、5 个新增。除上述两个 synthetic demo 文件外，提交 `fc91357` 为 raw 模式修改 `CMakeLists.txt`、`core_param.yaml`、`elevation_mapping.py`、`elevation_mapping_node.py`、`parameter.py`，并新增两份 raw 配置、raw 测试、launch 和 RViz 配置。
+- 核心边界：`elevation_mapping.py` 的权重加载、推理、漂移补偿和查询路径已做小范围条件化，节点与参数类增加开关；点云融合公式、CuPy/CUDA kernel、法向量 kernel、原 traversability 网络计算和局部平面拟合实现未改。
+- 当前仓库状态：工作区根目录的新统一 Git 仓库分支为 `main` 且没有 remote；这是后续版本管理结构，不代表原 package 是从官方 `main` 克隆。原临时嵌套 Git 备份现已不存在，因此以已记录 HEAD、Shell 克隆命令和官方仓库提交三方交叉核验。
+- 验证：实际执行官方仓库克隆、`git branch -r --contains deb1c86`、提交元数据查询、忽略行尾差异的目录比较，以及 `608adab..HEAD` 提交差异检查。未运行 build、ROS 节点或算法测试；本阶段只调查版本来源和静态源码差异。
+- 对应提交说明：`docs: record elevation mapping upstream provenance`。
