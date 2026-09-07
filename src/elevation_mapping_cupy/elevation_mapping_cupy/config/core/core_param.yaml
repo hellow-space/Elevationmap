@@ -64,6 +64,7 @@
     enable_pointcloud_publishing: false
     enable_drift_corrected_TF_publishing: false
     #### Traversability filter ########
+    enable_traversability: true                     # false skips neural weights and inference.
     use_chainer: false                              # If false, uses the PyTorch backend (GPU).
 
     #### Upper bound ########

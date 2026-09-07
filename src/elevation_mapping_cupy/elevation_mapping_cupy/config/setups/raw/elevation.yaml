@@ -1,0 +1,17 @@
+/elevation_mapping_node:
+  ros__parameters:
+    map_frame: map
+    base_frame: base_link
+    corrected_map_frame: map
+    enable_traversability: false
+    enable_drift_compensation: false
+    use_initializer_at_start: false
+    subscribers:
+      depth:
+        topic_name: /camera/depth/points
+        data_type: pointcloud
+    publishers:
+      elevation_map:
+        layers: [elevation, variance]
+        basic_layers: [elevation]
+        fps: 10.0

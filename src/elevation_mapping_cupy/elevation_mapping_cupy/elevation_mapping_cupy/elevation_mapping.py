@@ -139,13 +139,14 @@ class ElevationMap:
 
         self.compile_kernels()
 
-        # No shell substitutions in research code: param.weight_file is expected to be a real path.
-        param.load_weights(param.weight_file)
-
-        if param.use_chainer:
-            self.traversability_filter = get_filter_chainer(param.w1, param.w2, param.w3, param.w_out)
-        else:
-            self.traversability_filter = get_filter_torch(param.w1, param.w2, param.w3, param.w_out)
+        self.traversability_filter = None
+        if param.enable_traversability:
+            # Raw elevation mode must not require weights or import a neural backend.
+            param.load_weights(param.weight_file)
+            if param.use_chainer:
+                self.traversability_filter = get_filter_chainer(param.w1, param.w2, param.w3, param.w_out)
+            else:
+                self.traversability_filter = get_filter_torch(param.w1, param.w2, param.w3, param.w_out)
         self.untraversable_polygon = xp.zeros((1, 2))
 
         # Plugins
@@ -368,7 +369,8 @@ class ElevationMap:
                 size=(points.shape[0]),
             )
             if (
-                self.param.enable_drift_compensation
+                self.param.enable_traversability
+                and self.param.enable_drift_compensation
                 and error_cnt > self.param.min_height_drift_cnt
                 and (
                     position_noise > self.param.position_noise_thresh
@@ -405,10 +407,11 @@ class ElevationMap:
                 size=(self.cell_n * self.cell_n),
             )
 
-            traversability = self.traversability_filter(self.traversability_input)
-            self.elevation_map[3][3:-3, 3:-3] = traversability.reshape(
-                (traversability.shape[2], traversability.shape[3])
-            )
+            if self.traversability_filter is not None:
+                traversability = self.traversability_filter(self.traversability_input)
+                self.elevation_map[3][3:-3, 3:-3] = traversability.reshape(
+                    (traversability.shape[2], traversability.shape[3])
+                )
             self.plugin_manager.reset_layers()
 
         self.update_normal(self.traversability_input)
@@ -626,6 +629,8 @@ class ElevationMap:
         Returns:
             traversability layer
         """
+        if not self.param.enable_traversability:
+            return cp.full((self.cell_n - 2, self.cell_n - 2), cp.nan)
         traversability = cp.where(
             (self.elevation_map[2] + self.elevation_map[6]) > 0.5,
             self.elevation_map[3].copy(),
@@ -913,6 +918,8 @@ class ElevationMap:
         Returns:
             Union[None, int]:
         """
+        if not self.param.enable_traversability:
+            raise RuntimeError("Neural traversability is disabled; polygon safety is unavailable.")
         polygon = xp.asarray(polygon)
         area = calculate_area(polygon)
         polygon = polygon.astype(self.data_type)

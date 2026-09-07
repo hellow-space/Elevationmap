@@ -199,6 +199,7 @@ class Parameter(Serializable):
     enable_visibility_cleanup: bool = True  # enable visibility cleanup
     enable_overlap_clearance: bool = True  # enable overlap clearance
     use_only_above_for_upper_bound: bool = True  # use only above for upper bound
+    enable_traversability: bool = True  # Load and run the neural traversability filter.
     use_chainer: bool = True  # use chainer as a backend of traversability filter or pytorch. If false, it uses pytorch. pytorch requires ~2GB more GPU memory compared to chainer but runs faster.
     position_noise_thresh: float = 0.1  # if the position change is bigger than this value, the drift compensation happens.
     orientation_noise_thresh: float = 0.1  # if the orientation change is bigger than this value, the drift compensation happens.

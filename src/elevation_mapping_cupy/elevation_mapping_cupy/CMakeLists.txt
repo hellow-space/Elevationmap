@@ -68,6 +68,11 @@ if(BUILD_TESTING)
     TIMEOUT 120
     ENV PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
   )
+  ament_add_pytest_test(test_raw_elevation
+    ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}/tests/test_raw_elevation.py
+    TIMEOUT 120
+    ENV PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
+  )
   ament_add_pytest_test(test_parameter
     ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}/tests/test_parameter.py
     TIMEOUT 120

@@ -1,10 +1,10 @@
 # 四轮足机器人地形评估
 
-更新日期：2026-09-06
+更新日期：2026-09-07
 
 ## 接手时先看这里
 
-已完成工作空间 baseline、主机 RViz2 启闭验证，以及现有局部平面拟合数值函数的最小精度测试（17 组及 3 种故障注入）。生产算法没有改动；测试地形现已发布 slope/roughness 并在主机 RViz 显示，主机 DDS 实收数值已核验。尚未接入生产高程地图或测试点云融合链路；下一步处理该链路，暂不接入 MPPI。
+已完成几何函数精度测试和测试地形 RViz 显示。当前新增原始高程模式：真正关闭神经网络权重加载/推理，仅发布融合 elevation/variance，并在主机实际订阅和显示。原始模式仍保留 CuPy 几何融合，尚未把 slope/roughness 接到生产地图。优先使用下方 raw 入口，不把测试夹具结果当作原始建图指标。
 
 阅读顺序：`AGENTS.md`（范围与规则）→ 本文件（进度与下一步）→ `EXPERIENCES.md` 的相关条目（验证过的方法）。只读下一步直接涉及的源码，不要重新扫描大量文件。
 
@@ -34,7 +34,19 @@ git -c safe.directory=/root/elevation_map status --short
 - baseline 保存当前源码原貌；忽略编译产物、Python 缓存等生成文件。
 - baseline 包含 `src/elevation_mapping_cupy/`、`src/elevation_nav2_bridge/` 和 `src/terrain_test/`。
 
-## 运行入口
+## 原始高程模式（当前优先入口）
+
+使用已有点云和 TF：加载 Humble 和 `install/setup.bash` 后执行：
+
+```bash
+ros2 launch elevation_mapping_cupy raw_elevation.launch.py
+```
+
+没有真实输入时加 `publish_test_cloud:=true`。本次测试两端用 Domain43 / CycloneDDS；真实数据源应沿用其 Domain。默认容器不启动 RViz，主机加载 `/tmp/raw_elevation.rviz`。详细命令、接入参数、raw 边界和高程/方差切换见 `src/terrain_test/RAW_ELEVATION.md`。
+
+当前运行中：容器 raw launch 当时 PID1460299（子节点1460357/1460359），主机 RViz 当时 PID3141037。操作前必须核对命令行，勿凭历史 PID 杀进程；旧 geometry_demo 已停止。
+
+## 原有 synthetic demo 运行入口（仍默认启用神经网络）
 
 在数据与建图环境：
 
@@ -56,6 +68,8 @@ ros2 launch elevation_mapping_cupy synthetic_depth_demo.launch.py launch_rviz:=f
 - 当前 demo 没有直接发布 `slope`、`roughness` 层。
 
 ## 目标与待办
+
+- [x] 提供无神经网络的原始融合高程/方差模式，并完成真实 GPU、ROS 话题与主机 RViz 验证。提交说明：`feat: add raw elevation mode without neural traversability`。
 
 - [x] 确认用户现有系统已能运行，记录 Humble 与外部 RViz 使用方式。证据与使用方法已保存于 `3d5e115`（`docs: record workspace handoff and host RViz procedure`）。
 - [x] 设计最小几何测试：人工生成已知角度平面，不依赖 Gazebo。
@@ -175,3 +189,16 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 
 - 按用户要求，核对命令行后停止本次测试发布程序并关闭主机 RViz；未修改代码或其他节点。
 - 对应提交说明：`docs: record geometry demo shutdown`。
+
+### 2026-09-07：无神经网络的 raw 高程与不确定度
+
+- 新增 `enable_traversability`（默认true保持旧行为）；false时跳过权重/后端/推理、禁用依赖该分数的漂移补偿，可通行性输出未知、多边形查询报禁用。
+- 新 raw launch 默认仅建图，支持点云/frames参数，可选择测试输入；空插件配置、关闭启动人工初始化，只发布 elevation/variance。RViz 高度取 elevation，颜色可切换 variance。
+- 修改核心参数、初始化与推理条件、ROS参数读取和 CMake 测试注册；新增 raw launch/config/RViz、GPU回归、主机订阅核验脚本及使用文档。
+- 构建：`colcon build --packages-select elevation_mapping_cupy --symlink-install` 成功。
+- 测试：raw/parameter/gridmap_layout 共6项通过；补强漂移测试后 `colcon test --packages-select elevation_mapping_cupy --ctest-args -R '^test_raw_elevation$' --event-handlers console_direct+` 2项通过；内存故障注入移除漂移guard时如期失败。
+- 实测：Domain43 运行 raw launch 测试输入，主机核验收到且仅收到 elevation/variance；单次5723有效格，高度0–0.397068m、方差0.000230091–0.019184548m²。`ros2 param get` 确认开关false。
+- 实际主机 RViz 初始化成功并截图核对 Global Status OK 和高程地形；截图在被忽略的 `build/raw-elevation-rviz.png`。窗口和发布节点保留供用户查看。
+- 失败教训：3帧融合尚有约1.5mm先验残差；检查融合公式后增加重复观测并验证收敛、方差下降，保留1mm精度门槛。并非原平面拟合测试失败。
+- 原始模式不是裸点云，不等于所有过滤均关闭；variance不是roughness。当前仍未在生产地图发布slope/roughness。
+- 提交说明：`feat: add raw elevation mode without neural traversability`。

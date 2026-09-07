@@ -188,6 +188,11 @@ class ElevationMappingNode(Node):
         # Assign to self.param so it won't use defaults. This is research code: crash loudly if
         # a required parameter is missing or mistyped.
         self.param.use_chainer = self.use_chainer
+        if not self.has_parameter("enable_traversability"):
+            self.declare_parameter("enable_traversability", True)
+        self.param.enable_traversability = self.get_parameter("enable_traversability").value
+        if not self.param.enable_traversability:
+            self.get_logger().info("Raw elevation mode: neural weights/inference and traversability-based drift compensation disabled.")
         if self.has_parameter("plugin_config_file"):
             plugin_config_file = self.get_parameter("plugin_config_file").get_parameter_value().string_value
             assert plugin_config_file
