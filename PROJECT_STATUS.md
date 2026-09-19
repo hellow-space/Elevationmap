@@ -1,6 +1,6 @@
 # 四轮足机器人地形评估
 
-更新日期：2026-09-07
+更新日期：2026-09-19
 
 ## 接手时先看这里
 
@@ -42,7 +42,7 @@ git -c safe.directory=/root/elevation_map status --short
 ros2 launch elevation_mapping_cupy raw_elevation.launch.py
 ```
 
-没有真实输入时加 `publish_test_cloud:=true`。本次测试两端用 Domain43 / CycloneDDS；真实数据源应沿用其 Domain。默认容器不启动 RViz，主机加载 `/tmp/raw_elevation.rviz`。详细命令、接入参数、raw 边界和高程/方差切换见 `src/terrain_test/RAW_ELEVATION.md`。
+默认真实点云输入为 `/cloud_registered`；也可用 `pointcloud_topic:=/其他话题` 覆盖。没有真实输入时使用测试入口必须显式将话题覆盖回 `/camera/depth/points`。本次历史测试两端用 Domain43 / CycloneDDS；真实数据源应沿用其 Domain。默认容器不启动 RViz，主机加载 `/tmp/raw_elevation.rviz`。详细命令、接入参数、raw 边界和高程/方差切换见 `src/terrain_test/RAW_ELEVATION.md`。
 
 当前运行中：容器 raw launch 当时 PID1460299（子节点1460357/1460359），主机 RViz 当时 PID3141037。操作前必须核对命令行，勿凭历史 PID 杀进程；旧 geometry_demo 已停止。
 
@@ -68,6 +68,8 @@ ros2 launch elevation_mapping_cupy synthetic_depth_demo.launch.py launch_rviz:=f
 - 当前 demo 没有直接发布 `slope`、`roughness` 层。
 
 ## 目标与待办
+
+- [x] 将 raw 高程模式的默认真实点云输入改为 `/cloud_registered`，保留 `elevation` 和 `variance` 输出及 launch 参数覆盖能力。提交说明：`feat: use registered cloud for raw elevation input`。
 
 - [x] 核实 `elevation_mapping_cupy` 的官方来源、原始克隆分支与当前核心差异。原始来源为 `leggedrobotics/elevation_mapping_cupy` 的 `ros2` 分支，浅克隆 HEAD 为 `deb1c86789a6873d48c28938d179b980858fd1bb`；差异边界见阶段记录。提交说明：`docs: record elevation mapping upstream provenance`。
 
@@ -216,3 +218,14 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 - 当前仓库状态：工作区根目录的新统一 Git 仓库分支为 `main` 且没有 remote；这是后续版本管理结构，不代表原 package 是从官方 `main` 克隆。原临时嵌套 Git 备份现已不存在，因此以已记录 HEAD、Shell 克隆命令和官方仓库提交三方交叉核验。
 - 验证：实际执行官方仓库克隆、`git branch -r --contains deb1c86`、提交元数据查询、忽略行尾差异的目录比较，以及 `608adab..HEAD` 提交差异检查。未运行 build、ROS 节点或算法测试；本阶段只调查版本来源和静态源码差异。
 - 对应提交说明：`docs: record elevation mapping upstream provenance`。
+
+### 2026-09-19：raw 高程默认接入真实注册点云
+
+- 完成目标：raw 模式默认订阅从 `/camera/depth/points` 改为 `/cloud_registered`；输出仍为 `/elevation_mapping_node/elevation_map`，类型 `grid_map_msgs/msg/GridMap`，包含 `elevation`（m）和 `variance`（m²）。神经网络保持关闭，未修改 MPPI 或几何指标。
+- 修改文件：raw YAML、raw launch、launch/config 回归测试、`src/terrain_test/RAW_ELEVATION.md`、状态与必要经验记录。YAML 可修改默认输入，launch 的 `pointcloud_topic` 参数仍可覆盖。
+- TDD：新增测试首先因 YAML 返回旧话题 `/camera/depth/points` 而失败；修改后通过。测试同时解析真实 YAML 和 ROS launch 默认 substitution，并锁定 elevation/variance 两层。
+- 构建：`colcon build --packages-select elevation_mapping_cupy --symlink-install --event-handlers console_direct+` 成功，1 package finished。
+- 完整测试：`colcon test --packages-select elevation_mapping_cupy --event-handlers console_direct+` 共 12 个 CTest 目标，11 个通过；`test_test_map_save_load_services.py` 因当前环境缺少配置要求的 `rosbag2_storage_mcap` 失败。失败发生在 rosbag writer open，与实时高程话题改动无关，不能记为全套测试通过。
+- 实际 ROS 接口：在 Domain77 / CycloneDDS、`publish_test_cloud:=false` 启动 raw launch，日志确认神经权重/推理关闭；`ros2 node info` 确认订阅 `/cloud_registered`（PointCloud2），发布 `/elevation_mapping_node/elevation_map`（GridMap）。当前 `/cloud_registered` publisher count 为 0，因此没有首帧和 TF，8 秒内未收到 GridMap 消息；没有把空接口或假数据描述成真实高程结果。
+- 当前问题：需要用户的真实点云进程与 TF 同时在线，才能验证实际 elevation/variance 数值及 RViz。地图保存测试另缺 MCAP storage plugin，见 `EXPERIENCES.md`。
+- 对应提交说明：`feat: use registered cloud for raw elevation input`。

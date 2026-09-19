@@ -1,7 +1,11 @@
 import importlib.util
 from pathlib import Path
 
+from launch import LaunchContext
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.utilities import perform_substitutions
+from ruamel.yaml import YAML
 
 
 def load_launch(path: Path) -> LaunchDescription:
@@ -23,3 +27,22 @@ def test_semantic_example_launch_descriptions_generate():
         description = load_launch(launch_file)
         assert isinstance(description, LaunchDescription)
         assert description.entities
+
+
+def test_raw_mode_defaults_to_registered_cloud_with_height_layers():
+    package_root = Path(__file__).resolve().parents[1]
+    config_path = package_root / "config" / "setups" / "raw" / "elevation.yaml"
+    config = YAML(typ="safe").load(config_path.read_text(encoding="utf-8"))
+    params = config["/elevation_mapping_node"]["ros__parameters"]
+
+    assert params["subscribers"]["depth"]["topic_name"] == "/cloud_registered"
+    assert params["publishers"]["elevation_map"]["layers"] == ["elevation", "variance"]
+
+    launch_description = load_launch(package_root / "launch" / "raw_elevation.launch.py")
+    topic_argument = next(
+        entity
+        for entity in launch_description.entities
+        if isinstance(entity, DeclareLaunchArgument) and entity.name == "pointcloud_topic"
+    )
+    default_topic = perform_substitutions(LaunchContext(), topic_argument.default_value)
+    assert default_topic == "/cloud_registered"

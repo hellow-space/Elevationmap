@@ -143,3 +143,26 @@ package 原有 `.git` 已移出工作区，临时备份也已消失；统一仓�
 
 **避免：**
 不要用父仓库当前分支名推断子目录原来的上游分支，也不要把 CRLF/LF 或 Python 缓存造成的目录差异算成算法改动。
+
+## 使用 MCAP 保存地图前必须确认 storage plugin 已安装
+
+**日期：** 2026-09-19
+**相关模块：** elevation_mapping_cupy / rosbag2 map services
+
+**现象：**
+`test_map_save_load_services.py` 在 `save_map` 阶段失败，日志为 `Could not load/open plugin with storage id 'mcap'` 和 `No storage could be initialized`；其余实时 GridMap 与 GPU 测试不受影响。
+
+**原因：**
+`core_param.yaml` 和集成测试配置指定 `save_map_storage_id: 'mcap'`，但当前 Humble 环境中 `ros2 pkg prefix rosbag2_storage_mcap` 返回 `Package not found`。`package.xml` 只声明了 `rosbag2_py`，没有声明 MCAP storage plugin。
+
+**解决方法：**
+本次没有扩大任务范围安装依赖或更换存储后端。执行地图保存测试前，先检查配置指定的 storage plugin 是否存在；缺失时应将该测试如实记录为环境依赖失败，不能用其他测试通过来掩盖。
+
+**验证：**
+完整 `colcon test --packages-select elevation_mapping_cupy` 稳定到达保存调用后在 writer open 阶段失败；包查询确认 `rosbag2_storage_mcap` 不存在，相关源码没有本次任务改动。
+
+**适用范围：**
+所有通过 `rosbag2_py.SequentialWriter` 并显式指定 `storage_id: mcap` 的保存流程。
+
+**避免：**
+不要把 `rosbag2_py` 已安装等同于 MCAP storage plugin 已安装，也不要把该环境失败误判为实时 elevation topic 失败。

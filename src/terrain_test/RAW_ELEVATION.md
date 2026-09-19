@@ -13,9 +13,9 @@ source install/setup.bash
 ros2 launch elevation_mapping_cupy raw_elevation.launch.py
 ```
 
-默认订阅 `/camera/depth/points`，要求已有从点云 frame 到 `map` 的 TF，和 `map` 到 `base_link` 的机器人位姿。默认不发布测试点云或 TF，也不在容器启动 RViz。
+默认订阅真实点云 `/cloud_registered`，要求已有从点云 frame 到 `map` 的 TF，和 `map` 到 `base_link` 的机器人位姿。默认不发布测试点云或 TF，也不在容器启动 RViz。
 
-可选参数：`pointcloud_topic:=/你的点云话题`、`map_frame:=odom`、`base_frame:=你的机身坐标系`、`use_sim_time:=true`（仅存在可用 /clock 时）。主机 RViz Fixed Frame 相应修改。
+可在 `config/setups/raw/elevation.yaml` 修改默认输入，也可在启动时覆盖：`pointcloud_topic:=/你的点云话题`。其他可选参数为 `map_frame:=odom`、`base_frame:=你的机身坐标系`、`use_sim_time:=true`（仅存在可用 /clock 时）。主机 RViz Fixed Frame 相应修改。
 
 ## 没有真实点云时，先用测试输入看效果
 
@@ -25,7 +25,8 @@ source /opt/ros/humble/setup.bash
 source install/setup.bash
 export ROS_DOMAIN_ID=43
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-ros2 launch elevation_mapping_cupy raw_elevation.launch.py publish_test_cloud:=true
+ros2 launch elevation_mapping_cupy raw_elevation.launch.py \
+  publish_test_cloud:=true pointcloud_topic:=/camera/depth/points
 ```
 
 测试输入使用仓库现有 synthetic_pointcloud_tf_publisher，机器人静止，关闭动态障碍，发布点云及 map→base_link。不要与发布相同 TF/话题的真实数据源同时使用。本次验证使用独立 Domain 43，主机必须相同；接真实数据时使用其已有 Domain。

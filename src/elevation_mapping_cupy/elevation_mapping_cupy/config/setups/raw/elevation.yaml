@@ -8,7 +8,7 @@
     use_initializer_at_start: false
     subscribers:
       depth:
-        topic_name: /camera/depth/points
+        topic_name: /cloud_registered
         data_type: pointcloud
     publishers:
       elevation_map:

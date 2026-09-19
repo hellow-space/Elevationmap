@@ -16,7 +16,7 @@ def generate_launch_description():
                               description='Publish synthetic cloud + map->base_link TF; use only without real input'),
         DeclareLaunchArgument('launch_rviz', default_value='false'),
         DeclareLaunchArgument('use_sim_time', default_value='false'),
-        DeclareLaunchArgument('pointcloud_topic', default_value='/camera/depth/points'),
+        DeclareLaunchArgument('pointcloud_topic', default_value='/cloud_registered'),
         DeclareLaunchArgument('map_frame', default_value='map'),
         DeclareLaunchArgument('base_frame', default_value='base_link'),
         Node(package='elevation_mapping_cupy', executable='elevation_mapping_node.py',
