@@ -17,7 +17,7 @@ def generate_launch_description():
         DeclareLaunchArgument('launch_rviz', default_value='false'),
         DeclareLaunchArgument('use_sim_time', default_value='false'),
         DeclareLaunchArgument('pointcloud_topic', default_value='/cloud_registered'),
-        DeclareLaunchArgument('map_frame', default_value='map'),
+        DeclareLaunchArgument('map_frame', default_value='camera_init'),
         DeclareLaunchArgument('base_frame', default_value='base_link'),
         Node(package='elevation_mapping_cupy', executable='elevation_mapping_node.py',
              name='elevation_mapping_node', output='screen',

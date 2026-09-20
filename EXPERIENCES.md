@@ -166,3 +166,26 @@ package 原有 `.git` 已移出工作区，临时备份也已消失；统一仓�
 
 **避免：**
 不要把 `rosbag2_py` 已安装等同于 MCAP storage plugin 已安装，也不要把该环境失败误判为实时 elevation topic 失败。
+
+## 当前 elevation Nav2 bridge 不转换 GridMap frame
+
+**日期：** 2026-09-20
+**相关模块：** elevation_nav2_bridge / Nav2 local costmap / TF
+
+**现象：**
+高程 GridMap、local costmap 和 `base_link` 容易被误认为应使用同一个 frame；把 GridMap 改为 `camera_init` 后，必须明确 Nav2 如何解释其坐标。
+
+**原因：**
+当前 `ElevationLayer` 缓存 GridMap 后，直接用 master costmap 的世界坐标查询 GridMap 索引；源码没有 TF buffer、frame 一致性检查或坐标变换。因此它隐含假设 GridMap `header.frame_id` 与 local costmap `global_frame` 相同。`base_link` 只表示机器人位姿和 footprint，不是固定地图 frame。
+
+**解决方法：**
+raw GridMap 使用 `camera_init` 时，Nav2 local costmap 应配置 `global_frame: camera_init`、`robot_base_frame: base_link`，并保证 `camera_init` 到 `base_link` 的 TF 可用。若未来必须使用不同 global frame，应先为 bridge 设计并验证显式 TF 转换，不能只改字符串。
+
+**验证：**
+逐段检查 `elevationCallback()`、`updateBounds()`、`updateCosts()` 和 `worldToGridMapIndex()` 的数据流，确认没有 frame 转换路径。本阶段只验证了源码行为和 raw 节点参数，没有运行 Nav2/MPPI 集成。
+
+**适用范围：**
+当前仓库的 `elevation_nav2_bridge::ElevationLayer`。
+
+**避免：**
+不要让 GridMap 发布在 `camera_init`、local costmap 却使用 `odom` 或 `map`，同时期待插件自动完成 TF 变换；也不要把滚动地图中心跟随 `base_link` 误解为地图发布在 `base_link`。

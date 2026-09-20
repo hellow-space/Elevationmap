@@ -46,3 +46,22 @@ def test_raw_mode_defaults_to_registered_cloud_with_height_layers():
     )
     default_topic = perform_substitutions(LaunchContext(), topic_argument.default_value)
     assert default_topic == "/cloud_registered"
+
+
+def test_raw_mode_defaults_to_camera_init_frame():
+    package_root = Path(__file__).resolve().parents[1]
+    config_path = package_root / "config" / "setups" / "raw" / "elevation.yaml"
+    config = YAML(typ="safe").load(config_path.read_text(encoding="utf-8"))
+    params = config["/elevation_mapping_node"]["ros__parameters"]
+
+    assert params["map_frame"] == "camera_init"
+    assert params["corrected_map_frame"] == "camera_init"
+
+    launch_description = load_launch(package_root / "launch" / "raw_elevation.launch.py")
+    frame_argument = next(
+        entity
+        for entity in launch_description.entities
+        if isinstance(entity, DeclareLaunchArgument) and entity.name == "map_frame"
+    )
+    default_frame = perform_substitutions(LaunchContext(), frame_argument.default_value)
+    assert default_frame == "camera_init"

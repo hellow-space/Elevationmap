@@ -42,7 +42,7 @@ git -c safe.directory=/root/elevation_map status --short
 ros2 launch elevation_mapping_cupy raw_elevation.launch.py
 ```
 
-默认真实点云输入为 `/cloud_registered`；也可用 `pointcloud_topic:=/其他话题` 覆盖。没有真实输入时使用测试入口必须显式将话题覆盖回 `/camera/depth/points`。本次历史测试两端用 Domain43 / CycloneDDS；真实数据源应沿用其 Domain。默认容器不启动 RViz，主机加载 `/tmp/raw_elevation.rviz`。详细命令、接入参数、raw 边界和高程/方差切换见 `src/terrain_test/RAW_ELEVATION.md`。
+默认真实点云输入为 `/cloud_registered`，GridMap frame 为 `camera_init`，机器人 frame 为 `base_link`；也可用 launch 参数覆盖。没有真实输入时使用测试入口必须显式将话题覆盖回 `/camera/depth/points`。本次历史测试两端用 Domain43 / CycloneDDS；真实数据源应沿用其 Domain。默认容器不启动 RViz，主机加载 `/tmp/raw_elevation.rviz`。详细命令、接入参数、raw 边界和高程/方差切换见 `src/terrain_test/RAW_ELEVATION.md`。
 
 当前运行中：容器 raw launch 当时 PID1460299（子节点1460357/1460359），主机 RViz 当时 PID3141037。操作前必须核对命令行，勿凭历史 PID 杀进程；旧 geometry_demo 已停止。
 
@@ -68,6 +68,8 @@ ros2 launch elevation_mapping_cupy synthetic_depth_demo.launch.py launch_rviz:=f
 - 当前 demo 没有直接发布 `slope`、`roughness` 层。
 
 ## 目标与待办
+
+- [x] 将 raw 高程 GridMap 的默认 frame 从 `map` 改为 `camera_init`，保留 `base_link` 作为机器人 frame 和 launch 覆盖能力。提交说明：`feat: publish raw elevation in camera_init frame`。
 
 - [x] 将 raw 高程模式的默认真实点云输入改为 `/cloud_registered`，保留 `elevation` 和 `variance` 输出及 launch 参数覆盖能力。提交说明：`feat: use registered cloud for raw elevation input`。
 
@@ -229,3 +231,13 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 - 实际 ROS 接口：在 Domain77 / CycloneDDS、`publish_test_cloud:=false` 启动 raw launch，日志确认神经权重/推理关闭；`ros2 node info` 确认订阅 `/cloud_registered`（PointCloud2），发布 `/elevation_mapping_node/elevation_map`（GridMap）。当前 `/cloud_registered` publisher count 为 0，因此没有首帧和 TF，8 秒内未收到 GridMap 消息；没有把空接口或假数据描述成真实高程结果。
 - 当前问题：需要用户的真实点云进程与 TF 同时在线，才能验证实际 elevation/variance 数值及 RViz。地图保存测试另缺 MCAP storage plugin，见 `EXPERIENCES.md`。
 - 对应提交说明：`feat: use registered cloud for raw elevation input`。
+
+### 2026-09-20：raw 高程默认 frame 改为 camera_init
+
+- 完成目标：raw YAML 的 `map_frame`、`corrected_map_frame` 以及 raw launch 的默认 `map_frame` 从 `map` 改为 `camera_init`；`base_frame=base_link`、输入 `/cloud_registered`、输出 topic 和 elevation/variance 两层保持不变。
+- TDD：新增 frame 回归测试后首先因 YAML 返回 `map` 而失败；最小配置修改后，launch/config 测试3项通过。
+- 构建：`colcon build --packages-select elevation_mapping_cupy --symlink-install --event-handlers console_direct+` 成功，1 package finished。
+- 完整测试：`colcon test --packages-select elevation_mapping_cupy --event-handlers console_direct+` 共12个 CTest 目标，11个通过；地图保存测试仍因环境缺少 `rosbag2_storage_mcap` 失败。synthetic demo 主体通过后在一次 SIGINT 关闭阶段出现消息转换异常，单独复跑该目标完整通过且节点干净退出；未修改该无关路径。
+- 实际 ROS 参数：在 Domain78 / CycloneDDS、无测试点云启动 raw launch，`ros2 param get` 实收 `map_frame=camera_init`、`corrected_map_frame=camera_init`、`base_frame=base_link`、输入 `/cloud_registered`；ROS 图确认发布 `/elevation_mapping_node/elevation_map`。当前 `/cloud_registered` publisher count 为0，因此未声称实际 GridMap header或高度数据已验证。
+- Nav2 边界：静态源码检查确认当前 `elevation_nav2_bridge` 直接把 GridMap 世界坐标用于 master costmap，不执行 TF frame 转换；接入时 local costmap `global_frame` 必须与 GridMap 的 `camera_init` 一致，`robot_base_frame` 使用 `base_link`。本阶段未运行 Nav2/MPPI。
+- 对应提交说明：`feat: publish raw elevation in camera_init frame`。
