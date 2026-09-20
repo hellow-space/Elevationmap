@@ -247,8 +247,15 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 
 ### 2026-09-20：Docker 内启动 raw 高程图操作文档
 
-- 完成目标：新增根目录 `RUN_RAW_ELEVATION.md`，覆盖宿主机查找/启动/进入现有容器、加载 ROS 2 Humble 与工作空间、设置已验证的 Domain42/CycloneDDS、检查真实点云与 TF、启动 raw launch、在第二终端核验 GridMap，以及安全停止方法。
-- 容器名称：当前容器内没有 Docker CLI/socket，无法可靠读取宿主机容器名称；文档使用 `<container_name>` 并要求先通过 `docker ps -a` 获取，不猜名称。仓库 `docker/run.sh` 指向 Jazzy 镜像，因此没有将它作为当前 Humble 环境的启动入口。
-- 边界：文档明确不使用 `publish_test_cloud:=true`，不启动 Nav2、MPPI 或 RViz；输入、输出、frame 和环境值来自本次已验证的真实链路。
-- 验证：逐项检查文档中的仓库路径、source 顺序、ROS topic/type、frame、Domain/RMW 和 Bash 多行命令；执行 `git diff --check` 并核对仅暂存本文档与状态记录。纯文档阶段未重新 build 或启动 ROS 节点。
+- 完成目标：新增根目录 `RUN_RAW_ELEVATION.md`，提供从宿主机直接启动现有容器、加载 ROS 2 Humble 与工作空间并运行 raw launch 的可复制命令。
+- 容器名称：通过宿主机 Docker 实际查询并用 `docker inspect` 核对，容器为 `elevation_env`，镜像为 `elevation_map_env:latest`，宿主机 `/home/nvidia/elevation_map` 挂载到容器 `/root/elevation_map`。文档不再要求用户自行查找容器名，也不再使用占位符。
+- 边界：命令使用已验证的 Domain42/CycloneDDS，不启用测试点云，不启动 Nav2、MPPI 或 RViz。
+- 验证：在宿主机实际查询容器状态和挂载；检查文档中的仓库路径、source 顺序、ROS topic、frame、Domain/RMW 和 Bash 多行命令。纯文档阶段不运行无关构建。
 - 对应提交说明：`docs: add raw elevation Docker startup guide`。
+
+### 2026-09-20：将 Docker 文档改为直接命令
+
+- 完成目标：根据用户反馈，将启动说明精简为使用真实容器名 `elevation_env` 的一段宿主机命令；删除容器查找步骤、`<container_name>` 占位符和非必要检查说明。
+- 验证：宿主机 `docker ps -a` 显示 `elevation_env` 正在运行；`docker inspect` 确认工作空间挂载目标为 `/root/elevation_map`。提交前检查 Markdown、Shell 语法、Git diff 和暂存范围。
+- 未运行：没有启动第二个高程建图节点，以免与当前运行链路冲突；本阶段不涉及源码，因此未运行 build 和算法测试。
+- 对应提交说明：`docs: use exact Docker command for raw elevation`。
