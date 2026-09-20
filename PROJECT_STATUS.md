@@ -69,6 +69,8 @@ ros2 launch elevation_mapping_cupy synthetic_depth_demo.launch.py launch_rviz:=f
 
 ## 目标与待办
 
+- [x] 新增宿主机进入现有 Docker、加载 Humble/工作空间环境并启动真实 raw 高程图的独立操作文档。提交说明：`docs: add raw elevation Docker startup guide`。
+
 - [x] 将 raw 高程 GridMap 的默认 frame 从 `map` 改为 `camera_init`，保留 `base_link` 作为机器人 frame 和 launch 覆盖能力。提交说明：`feat: publish raw elevation in camera_init frame`。
 
 - [x] 将 raw 高程模式的默认真实点云输入改为 `/cloud_registered`，保留 `elevation` 和 `variance` 输出及 launch 参数覆盖能力。提交说明：`feat: use registered cloud for raw elevation input`。
@@ -242,3 +244,11 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 - 后续真实链路复查：在实际系统 Domain42 / CycloneDDS 中，`/cloud_registered` 有1个 `laserMapping` 发布器且消息 `frame_id=camera_init`，建图节点订阅匹配；`tf2_echo camera_init base_link` 连续收到变换。`check_raw_elevation.py` 实收 GridMap 的 `frame=camera_init`、layers=`elevation,variance`、分辨率0.1m、1027个有效高程格；当帧高度范围约-0.617305～1.587893m，方差范围约0.001338～4.030836m²。由此确认当前真实点云、TF和raw高程发布链路已运行。该数值只是当帧观测，不代表长期范围或精度保证。
 - Nav2 边界：静态源码检查确认当前 `elevation_nav2_bridge` 直接把 GridMap 世界坐标用于 master costmap，不执行 TF frame 转换；接入时 local costmap `global_frame` 必须与 GridMap 的 `camera_init` 一致，`robot_base_frame` 使用 `base_link`。本阶段未运行 Nav2/MPPI。
 - 对应提交说明：`feat: publish raw elevation in camera_init frame`。
+
+### 2026-09-20：Docker 内启动 raw 高程图操作文档
+
+- 完成目标：新增根目录 `RUN_RAW_ELEVATION.md`，覆盖宿主机查找/启动/进入现有容器、加载 ROS 2 Humble 与工作空间、设置已验证的 Domain42/CycloneDDS、检查真实点云与 TF、启动 raw launch、在第二终端核验 GridMap，以及安全停止方法。
+- 容器名称：当前容器内没有 Docker CLI/socket，无法可靠读取宿主机容器名称；文档使用 `<container_name>` 并要求先通过 `docker ps -a` 获取，不猜名称。仓库 `docker/run.sh` 指向 Jazzy 镜像，因此没有将它作为当前 Humble 环境的启动入口。
+- 边界：文档明确不使用 `publish_test_cloud:=true`，不启动 Nav2、MPPI 或 RViz；输入、输出、frame 和环境值来自本次已验证的真实链路。
+- 验证：逐项检查文档中的仓库路径、source 顺序、ROS topic/type、frame、Domain/RMW 和 Bash 多行命令；执行 `git diff --check` 并核对仅暂存本文档与状态记录。纯文档阶段未重新 build 或启动 ROS 节点。
+- 对应提交说明：`docs: add raw elevation Docker startup guide`。
