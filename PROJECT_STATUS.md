@@ -242,7 +242,7 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 - 完整测试：`colcon test --packages-select elevation_mapping_cupy --event-handlers console_direct+` 共12个 CTest 目标，11个通过；地图保存测试仍因环境缺少 `rosbag2_storage_mcap` 失败。synthetic demo 主体通过后在一次 SIGINT 关闭阶段出现消息转换异常，单独复跑该目标完整通过且节点干净退出；未修改该无关路径。
 - 实际 ROS 参数：在 Domain78 / CycloneDDS、无测试点云启动 raw launch，`ros2 param get` 实收 `map_frame=camera_init`、`corrected_map_frame=camera_init`、`base_frame=base_link`、输入 `/cloud_registered`；ROS 图确认发布 `/elevation_mapping_node/elevation_map`。当前 `/cloud_registered` publisher count 为0，因此未声称实际 GridMap header或高度数据已验证。
 - 后续真实链路复查：在实际系统 Domain42 / CycloneDDS 中，`/cloud_registered` 有1个 `laserMapping` 发布器且消息 `frame_id=camera_init`，建图节点订阅匹配；`tf2_echo camera_init base_link` 连续收到变换。`check_raw_elevation.py` 实收 GridMap 的 `frame=camera_init`、layers=`elevation,variance`、分辨率0.1m、1027个有效高程格；当帧高度范围约-0.617305～1.587893m，方差范围约0.001338～4.030836m²。由此确认当前真实点云、TF和raw高程发布链路已运行。该数值只是当帧观测，不代表长期范围或精度保证。
-- Nav2 边界：静态源码检查确认当前 `elevation_nav2_bridge` 直接把 GridMap 世界坐标用于 master costmap，不执行 TF frame 转换；接入时 local costmap `global_frame` 必须与 GridMap 的 `camera_init` 一致，`robot_base_frame` 使用 `base_link`。本阶段未运行 Nav2/MPPI。
+- Nav2 边界：静态源码检查确认当前 `elevation_nav2_bridge` 直接把 GridMap 世界坐标用于 master costmap，不执行 TF frame 转换，因此两者 frame 必须一致。本阶段当时未读取实机 local costmap 配置；后续实测发现其 `global_frame=map`，且 `camera_init` 倾斜约34°，所以当时建议 local costmap 改用 `camera_init` 的具体结论已失效，见后续“定位实机高程图倾斜原因”。
 - 对应提交说明：`feat: publish raw elevation in camera_init frame`。
 
 ### 2026-09-20：Docker 内启动 raw 高程图操作文档
@@ -259,3 +259,13 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 - 验证：宿主机 `docker ps -a` 显示 `elevation_env` 正在运行；`docker inspect` 确认工作空间挂载目标为 `/root/elevation_map`。提交前检查 Markdown、Shell 语法、Git diff 和暂存范围。
 - 未运行：没有启动第二个高程建图节点，以免与当前运行链路冲突；本阶段不涉及源码，因此未运行 build 和算法测试。
 - 对应提交说明：`docs: use exact Docker command for raw elevation`。
+
+### 2026-09-20：定位实机高程图倾斜原因
+
+- 调查结果：GridMap 消息自身 pose orientation 为单位四元数，显示倾斜不是消息 pose 引起。`/cloud_registered` 和 GridMap header 都是 `camera_init`，节点因两者同 frame 而直接把点云 Z 当作高度。
+- TF 证据：连续实测 `camera_init -> base_link` pitch 约 -33.9°；TF 链为近似单位的 `camera_init -> aft_mapped` 加固定的 `aft_mapped -> base_link` -33.97° pitch。`map -> camera_init` 含约 +33.97° pitch，而 `map -> base_link` roll/pitch 约 0°。
+- 集成证据：当前 Nav2 local costmap 参数为 `global_frame=map`、`robot_base_frame=base_link`；现有 elevation bridge 不做 frame 转换。因此发布在倾斜的 `camera_init` 下既使高程基准倾斜，也与 local costmap frame 不一致。
+- 当前结论：本实机应优先验证把 raw GridMap 改回重力对齐且与 local costmap 一致的 `map`；本阶段按诊断请求未修改运行配置，未把候选方案描述为已验证修复。
+- 实际命令：Domain42/CycloneDDS 下检查 point cloud/GridMap header 与 GridMap pose，运行 `tf2_echo camera_init base_link`、`tf2_echo map camera_init`、`tf2_echo map base_link`，并读取 `/local_costmap/local_costmap` frame 参数和 `/tf`、`/tf_static` 发布链。
+- 未运行：未重启高程节点、未切换 map frame、未运行 build/test 或 MPPI。
+- 对应提交说明：`docs: diagnose tilted elevation frame`。
