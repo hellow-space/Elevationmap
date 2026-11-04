@@ -269,3 +269,17 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 - 实际命令：Domain42/CycloneDDS 下检查 point cloud/GridMap header 与 GridMap pose，运行 `tf2_echo camera_init base_link`、`tf2_echo map camera_init`、`tf2_echo map base_link`，并读取 `/local_costmap/local_costmap` frame 参数和 `/tf`、`/tf_static` 发布链。
 - 未运行：未重启高程节点、未切换 map frame、未运行 build/test 或 MPPI。
 - 对应提交说明：`docs: diagnose tilted elevation frame`。
+
+
+## 2026-11-04：注册点云使用当前物理传感器原点
+
+- 目标：修复 `/cloud_registered` 的固定坐标原点被误用为当前雷达原点；不改 CUDA/MPPI/FAST-LIVO 或增加激进裁点。
+- 分支：`fix/cloud-sensor-origin`，开始 HEAD `4ea09a2`。已有用户配置/文档改动原样保留；仅暂存本轮增量。
+- 修改：新增 `pointcloud_geometry.py`，在节点中区分 cloud frame 和 sensor frame、保留地图几何、使用物理原点进行噪声/距离/高度/射线融合；有界 TF fallback 告警，失败不更新观测时间。raw 真实传感器默认 livox_frame，测试生成器使用 base_frame。
+- 验证：容器内 `colcon build --packages-select elevation_mapping_cupy --symlink-install` 成功；18 项 callback/launch/实际 GPU 用例通过；独立域144的 PointCloud2→TF→GPU→GridMap 流程、移动原点和拒绝帧不刷新时间均通过。
+- 性能：18000 点 CPU 适配 P50 1.336 ms、P95 1.373 ms（200 次），不含 TF/DDS/GPU，不代表实机总时延。
+- 完整测试：`colcon test --packages-select elevation_mapping_cupy` 已运行，15 组中6组失败，64 用例中10 errors/10 failures，均与默认神经模式导入 PyTorch 缺 `libcudss.so.0` 及其节点启动失败有关。raw 模式新测试通过，不把整包描述为全通过。MCAP storage 也未安装，但本轮保存测试尚未到达存储阶段。
+- 已验证独立审查意见已修正：零时间动态 TF 不可冒充静态 TF，recent latest fallback 必须告警。已有 ros2_numpy intensity 解码问题单独记录，raw XYZ 不走该分支。
+- 证据与复现：`docs/SENSOR_ORIGIN_FIX.md` 与 `docs/analysis/sensor_origin_2026-11-04/`。
+- 提交说明：`fix: use physical sensor origin for registered cloud fusion`；可用该唯一说明查询提交，避免自引用 hash。
+- 后续：实机重新录包比较高程效果；先确认物理外参、输入时间与模式交接。未声称雷达视场/转圈/全部定位问题已解决。

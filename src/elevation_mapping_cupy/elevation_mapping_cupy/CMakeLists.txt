@@ -99,6 +99,24 @@ if(BUILD_TESTING)
     ENV PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
   )
 
+  ament_add_pytest_test(test_pointcloud_sensor_origin
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/test_pointcloud_sensor_origin.py
+    TIMEOUT 120
+    ENV PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
+  )
+
+  ament_add_pytest_test(test_sensor_origin_fusion
+    ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}/tests/test_sensor_origin_fusion.py
+    TIMEOUT 120
+    ENV PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
+  )
+
+  ament_add_pytest_test(test_sensor_origin_launch
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/test_sensor_origin_launch.py
+    TIMEOUT 120
+    ENV PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
+  )
+
   # Define isolated launch test function for unique ROS_DOMAIN_ID per test
   # See: https://docs.ros.org/en/jazzy/Tutorials/Intermediate/Testing/Integration.html
   function(add_ros_isolated_launch_test path)

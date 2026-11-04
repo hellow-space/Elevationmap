@@ -191,3 +191,21 @@ Elevation Mapping 把 map frame 的 XY 平面视为水平面、Z 轴视为高度
 
 **避免：**
 不要因为点云 header 是 `camera_init` 就直接把它用作高程地图 frame；必须先确认其 Z 轴是否与重力方向一致。不要让 GridMap 发布在 `camera_init`、local costmap 却使用 `map`，同时期待插件自动完成 TF 变换；也不要把滚动地图中心跟随 `base_link` 误解为地图发布在 `base_link`。原先仅根据话题 frame 将 raw GridMap 改为 `camera_init` 的结论已被本次实机 TF 测量推翻。
+
+
+## 注册点云的坐标系原点不能冒充当前传感器原点
+
+**日期：** 2026-11-04
+**相关模块：** elevation_mapping_cupy 点云输入、噪声和射线融合
+
+**现象：** 输入 `/cloud_registered` 已在固定 camera_init 坐标，原节点直接将 map←camera_init 的 R/t 传入融合。
+
+**原因：** GPU 同时把 raw XYZ 当作传感器相对距离、把 t 当作清理射线和高度门限的传感器起点；固定世界坐标表达不满足这一语义。
+
+**解决方法：** 显式配置 subscriber 的 `sensor_frame`，由 map←cloud 和 map←sensor 将点重新表达在当前传感器坐标，仍用既有 GPU API 传入 map←sensor。点的世界位置不变，物理原点和量测距离恢复正确。缺失/过旧 TF 拒绝融合且不刷新观测时间。
+
+**验证：** 18 项 callback/launch/真实 GPU 测试通过；原始传感器参考与注册点校正的高程/方差匹配，距离及 ramped-height 门限使用当前原点；独立域144实际发布 GridMap 并验证移动原点。完整包默认神经模式被缺失的 libcudss.so.0 阻断，记录于任务报告，不能称全包通过。
+
+**适用范围：** 原始传感器点云与已注册到世界系的点云混用；要求物理传感器 TF 外参正确。
+
+**避免：** 不要把 cloud header.frame_id 自动当成物理传感器位置；不要用无界 latest TF；不要以 stamp=0 推断 fallback 一定为静态；不要让被拒绝的观测刷新旧地图。该修正不补充物理视场盲区，也不代替上游时间同步。

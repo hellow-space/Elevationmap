@@ -10,6 +10,8 @@
       depth:
         topic_name: /cloud_registered
         data_type: pointcloud
+        sensor_frame: livox_frame
+        max_tf_age: 0.2
     publishers:
       elevation_map:
         layers: [elevation, variance]
