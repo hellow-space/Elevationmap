@@ -181,10 +181,10 @@ Elevation Mapping 把 map frame 的 XY 平面视为水平面、Z 轴视为高度
 此外，当前 `ElevationLayer` 缓存 GridMap 后，直接用 master costmap 的世界坐标查询 GridMap 索引；源码没有 TF buffer、frame 一致性检查或坐标变换。因此它隐含假设 GridMap `header.frame_id` 与 local costmap `global_frame` 相同。`base_link` 只表示机器人位姿和 footprint，不是固定地图 frame。
 
 **解决方法：**
-先选择重力对齐的固定 frame，再令 raw GridMap 和 Nav2 local costmap 使用同一 frame。当前实机中 local costmap 的 `global_frame` 实测为 `map`，`map -> base_link` 的 roll/pitch 约 0°，而 `map -> camera_init` 含约 +33.97° pitch；因此 `map` 是当前已测得同时满足水平和 costmap 一致性的候选。将 raw GridMap 改回 `map` 后仍需实际运行并检查地图，验证成功前不把候选方案记为修复完成。若未来必须使用不同 global frame，应先为 bridge 增加并验证显式 TF 转换。
+先选择重力对齐的固定 frame，再令 raw GridMap 和 Nav2 local costmap 使用同一 frame。当前实机中 local costmap 的 `global_frame` 实测为 `map`，`map -> base_link` 的 roll/pitch 约 0°，而 `map -> camera_init` 含约 +33.97° pitch；因此 raw 默认 frame 已恢复为 `map`，点云仍可在 `camera_init`，由 TF 转换到 `map` 后建图。若未来必须使用不同 global frame，应先为 bridge 增加并验证显式 TF 转换。
 
 **验证：**
-逐段检查 `elevationCallback()`、`updateBounds()`、`updateCosts()` 和 `worldToGridMapIndex()` 的数据流，确认没有 frame 转换路径。Domain42/CycloneDDS 实测 `/cloud_registered` 与 GridMap header 都是 `camera_init`；GridMap pose orientation 为单位四元数；TF 连续采样得到 `camera_init -> base_link` pitch 约 -33.9°、`map -> camera_init` pitch 约 +33.97°、`map -> base_link` roll/pitch 约 0°；ROS 参数确认 local costmap `global_frame=map`、`robot_base_frame=base_link`。本阶段只定位原因，尚未切换 frame 后复测地图，也未运行 MPPI。
+逐段检查 `elevationCallback()`、`updateBounds()`、`updateCosts()` 和 `worldToGridMapIndex()` 的数据流，确认没有 frame 转换路径。Domain42/CycloneDDS 实测原 `/cloud_registered` 与 GridMap header 都是 `camera_init`；GridMap pose orientation 为单位四元数；TF 连续采样得到 `camera_init -> base_link` pitch 约 -33.9°、`map -> camera_init` pitch 约 +33.97°、`map -> base_link` roll/pitch 约 0°；ROS 参数确认 local costmap `global_frame=map`、`robot_base_frame=base_link`。修改后节点参数实收 `map_frame=map`、`corrected_map_frame=map`；真实点云恢复后实收 GridMap `frame=map`、单位 pose orientation 和 `elevation/variance` 两层，`map -> base_link` roll/pitch 约 0°，确认原约34°的坐标系假倾斜已从高程地图基准中移除。本阶段未运行 MPPI。
 
 **适用范围：**
 当前仓库的 `elevation_nav2_bridge::ElevationLayer`。
@@ -209,3 +209,21 @@ Elevation Mapping 把 map frame 的 XY 平面视为水平面、Z 轴视为高度
 **适用范围：** 原始传感器点云与已注册到世界系的点云混用；要求物理传感器 TF 外参正确。
 
 **避免：** 不要把 cloud header.frame_id 自动当成物理传感器位置；不要用无界 latest TF；不要以 stamp=0 推断 fallback 一定为静态；不要让被拒绝的观测刷新旧地图。该修正不补充物理视场盲区，也不代替上游时间同步。
+
+
+## 量化原点修正要分开噪声模型、合成误差和现场精度
+
+**日期：** 2026-11-04
+**相关模块：** 高程点云输入、离线对照
+
+**现象：** 机器人靠近固定注册点云原点时，新旧融合差异很小；远离原点后噪声和门限差异显著。
+
+**原因：** 旧距离随固定世界原点计算。全段统计会被长时间静止稀释；0.05×距离²仅为测量方差模型输出，不是地形高度真值误差。
+
+**解决方法：** 同一批记录点和TF进行配对比较，公开全段及明确位移条件子集；另用带真值的合成GPU实验与独立原生传感器参考比较，分别报告。
+
+**验证：** 旧包46个有效抽样帧，17帧原点偏差超过1 m；合成88格13次观测的原生参考与新适配高度/方差一致。数据保存在主工程高程对照报告。
+
+**适用范围：** 注册点云适配、模型方差及门限修正的效果评估。
+
+**避免：** 不将方差下降当作实际精度提升；不将采用TF后的零原点差称作零定位误差；不以离线可用TF证明实时TF健康；不把格数减少百分比当作总延迟减少百分比。

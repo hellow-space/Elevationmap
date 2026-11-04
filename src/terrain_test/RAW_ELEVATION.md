@@ -13,9 +13,9 @@ source install/setup.bash
 ros2 launch elevation_mapping_cupy raw_elevation.launch.py
 ```
 
-默认订阅真实点云 `/cloud_registered`，高程 GridMap 默认发布在 `camera_init`。若点云的 `header.frame_id` 已是 `camera_init`，无需额外转换点云；若不是，需要从点云 frame 到 `camera_init` 的 TF。地图围绕机器人移动仍要求 `camera_init` 到 `base_link` 的 TF。默认不发布测试点云或 TF，也不在容器启动 RViz。
+默认订阅真实点云 `/cloud_registered`，高程 GridMap 默认发布在重力对齐的 `map`。当前点云 `header.frame_id` 是倾斜的 `camera_init`，节点通过现有 `map` 与 `camera_init` TF 将点云转换到水平坐标系后计算高度。地图围绕机器人移动还要求 `map` 到 `base_link` 的 TF。默认不发布测试点云或 TF，也不在容器启动 RViz。
 
-可在 `config/setups/raw/elevation.yaml` 修改默认输入，也可在启动时覆盖：`pointcloud_topic:=/你的点云话题`。其他可选参数为 `map_frame:=odom`、`base_frame:=你的机身坐标系`、`use_sim_time:=true`（仅存在可用 /clock 时）。raw launch 的 `map_frame` 默认值会覆盖 YAML，对外切换 frame 时应使用 launch 参数；主机 RViz Fixed Frame 必须与之相同。
+可在 `config/setups/raw/elevation.yaml` 修改默认输入，也可在启动时覆盖：`pointcloud_topic:=/你的点云话题`。其他可选参数为 `map_frame:=重力对齐且与local_costmap一致的坐标系`、`base_frame:=你的机身坐标系`、`use_sim_time:=true`（仅存在可用 /clock 时）。raw launch 的 `map_frame` 默认值会覆盖 YAML，对外切换 frame 时应使用 launch 参数；主机 RViz Fixed Frame 必须与之相同。
 
 ## 没有真实点云时，先用测试输入看效果
 
@@ -29,7 +29,7 @@ ros2 launch elevation_mapping_cupy raw_elevation.launch.py \
   publish_test_cloud:=true pointcloud_topic:=/camera/depth/points
 ```
 
-测试输入使用仓库现有 synthetic_pointcloud_tf_publisher，机器人静止，关闭动态障碍，发布点云及 camera_init→base_link。不要与发布相同 TF/话题的真实数据源同时使用。本次验证使用独立 Domain 43，主机必须相同；接真实数据时使用其已有 Domain。
+测试输入使用仓库现有 synthetic_pointcloud_tf_publisher，机器人静止，关闭动态障碍，发布点云及 map→base_link。不要与发布相同 TF/话题的真实数据源同时使用。本次验证使用独立 Domain 43，主机必须相同；接真实数据时使用其已有 Domain。
 
 ## 主机 RViz
 
@@ -39,11 +39,11 @@ ros2 launch elevation_mapping_cupy raw_elevation.launch.py \
 source /opt/ros/humble/setup.bash
 export ROS_DOMAIN_ID=43
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-rviz2 -d /tmp/raw_elevation.rviz -f camera_init
+rviz2 -d /tmp/raw_elevation.rviz -f map
 ```
 
 - 话题：`/elevation_mapping_node/elevation_map`，消息 GridMap。
-- 默认 frame：`camera_init`。Nav2 接入时 local costmap 的 `global_frame` 必须与 GridMap frame 一致，`robot_base_frame` 使用 `base_link`；当前 bridge 不执行 frame 转换。
+- 默认 frame：`map`。Nav2 接入时 local costmap 的 `global_frame` 必须与 GridMap frame 一致，`robot_base_frame` 使用 `base_link`；当前 bridge 不执行 frame 转换。
 - 层：`elevation`（米）、`variance`（平方米）。几何高度始终选择 elevation。
 - 默认启用 `Raw elevation (m)`，按高程着色。
 - 查看不确定度：关闭 `Raw elevation (m)`，启用 `Variance (m2) - enable to color uncertainty`。颜色取 variance，仍按 elevation 显示起伏。不要同时启用两项，以免表面重叠闪烁。

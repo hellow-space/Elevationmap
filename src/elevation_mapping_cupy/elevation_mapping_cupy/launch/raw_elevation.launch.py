@@ -19,7 +19,7 @@ def generate_launch_description():
         DeclareLaunchArgument('pointcloud_topic', default_value='/cloud_registered'),
         DeclareLaunchArgument('pointcloud_sensor_frame', default_value='livox_frame',
                               description='Physical sensor origin, distinct from cloud coordinates'),
-        DeclareLaunchArgument('map_frame', default_value='camera_init'),
+        DeclareLaunchArgument('map_frame', default_value='map'),
         DeclareLaunchArgument('base_frame', default_value='base_link'),
         SetLaunchConfiguration('pointcloud_sensor_frame', LaunchConfiguration('base_frame'),
                                condition=IfCondition(LaunchConfiguration('publish_test_cloud'))),

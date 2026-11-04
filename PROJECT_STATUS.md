@@ -42,7 +42,7 @@ git -c safe.directory=/root/elevation_map status --short
 ros2 launch elevation_mapping_cupy raw_elevation.launch.py
 ```
 
-默认真实点云输入为 `/cloud_registered`，GridMap frame 为 `camera_init`，机器人 frame 为 `base_link`；也可用 launch 参数覆盖。没有真实输入时使用测试入口必须显式将话题覆盖回 `/camera/depth/points`。本次历史测试两端用 Domain43 / CycloneDDS；真实数据源应沿用其 Domain。默认容器不启动 RViz，主机加载 `/tmp/raw_elevation.rviz`。详细命令、接入参数、raw 边界和高程/方差切换见 `src/terrain_test/RAW_ELEVATION.md`。
+默认真实点云输入为 `/cloud_registered`，GridMap frame 为重力对齐且与 local costmap 一致的 `map`，机器人 frame 为 `base_link`；点云自身仍可使用 `camera_init`，由 TF 转换后参与建图。也可用 launch 参数覆盖。没有真实输入时使用测试入口必须显式将话题覆盖回 `/camera/depth/points`。本次历史测试两端用 Domain43 / CycloneDDS；真实数据源应沿用其 Domain。默认容器不启动 RViz，主机加载 `/tmp/raw_elevation.rviz`。详细命令、接入参数、raw 边界和高程/方差切换见 `src/terrain_test/RAW_ELEVATION.md`。
 
 当前运行中：容器 raw launch 当时 PID1460299（子节点1460357/1460359），主机 RViz 当时 PID3141037。操作前必须核对命令行，勿凭历史 PID 杀进程；旧 geometry_demo 已停止。
 
@@ -68,6 +68,8 @@ ros2 launch elevation_mapping_cupy synthetic_depth_demo.launch.py launch_rviz:=f
 - 当前 demo 没有直接发布 `slope`、`roughness` 层。
 
 ## 目标与待办
+
+- [x] 将 raw 高程 GridMap 默认 frame 从实机中倾斜约34°的 `camera_init` 恢复为重力对齐、并与 local costmap 一致的 `map`。提交说明：`fix: use gravity-aligned frame for raw elevation`。
 
 - [x] 新增宿主机进入现有 Docker、加载 Humble/工作空间环境并启动真实 raw 高程图的独立操作文档。提交说明：`docs: add raw elevation Docker startup guide`。
 
@@ -270,6 +272,17 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 - 未运行：未重启高程节点、未切换 map frame、未运行 build/test 或 MPPI。
 - 对应提交说明：`docs: diagnose tilted elevation frame`。
 
+### 2026-09-20：raw 高程恢复重力对齐的 map frame
+
+- 完成目标：raw YAML 的 `map_frame`、`corrected_map_frame` 与 raw launch 默认 `map_frame` 从倾斜的 `camera_init` 恢复为 `map`；输入仍为 `/cloud_registered`，`base_frame=base_link`，输出仍只有 `elevation/variance`。同步更新启动和 raw 使用文档。
+- TDD：先将真实 YAML 和 launch 默认值的回归测试改为期望 `map`，测试因实际值仍为 `camera_init` 按预期失败；修改两个配置入口后目标测试通过。
+- 构建：`colcon build --packages-select elevation_mapping_cupy --symlink-install --event-handlers console_direct+` 成功，1 package finished。
+- 完整测试：第一次在容器全局 Domain42 执行时，3个 ROS launch 测试收到了正在运行的实机节点数据而失败；证据包括 synthetic 测试在自身节点初始化前收到 `camera_init` 消息。改用空闲 Domain97 分项复跑确认 TF/GridMap 和 synthetic 测试通过、地图保存仍仅因已知的 `rosbag2_storage_mcap` 缺失失败；最终在空闲 Domain96 完整重跑，12个 CTest 目标中11个通过，唯一失败为该地图保存依赖。
+- 运行验证：Domain42 启动新 raw 节点，参数实收 `map_frame=map`、`corrected_map_frame=map`、`base_frame=base_link`，订阅 `/cloud_registered` 并提供 GridMap publisher。真实点云恢复后，`check_raw_elevation.py` 实收 GridMap `frame=map`、layers=`elevation,variance`、分辨率0.1m、1420个有效格；当帧高度范围约-0.435565～1.172765m、方差范围约0.00159661～2.63681m²。GridMap pose orientation为单位四元数，实时 `map -> base_link` roll/pitch约0°，确认原约34°的坐标系假倾斜已从地图基准中移除。
+- 隔离消息验证：Domain99 使用 raw launch 测试输入，`check_raw_elevation.py` 实收 GridMap `frame=map`、layers=`elevation,variance`、分辨率0.1m、5723个有效格；高度范围0～0.397067m、方差范围约0.000153485～0.0170613m²。测试节点随后正常停止；Domain42的新 raw节点保留运行等待真实点云和TF恢复。
+- 当前问题：尚未保存新的RViz截图或运行Nav2/MPPI；当帧高度范围包含真实地形与障碍物，不能仅凭最大最小值评价几何精度。
+- 对应提交说明：`fix: use gravity-aligned frame for raw elevation`。
+
 
 ## 2026-11-04：注册点云使用当前物理传感器原点
 
@@ -283,3 +296,16 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 - 证据与复现：`docs/SENSOR_ORIGIN_FIX.md` 与 `docs/analysis/sensor_origin_2026-11-04/`。
 - 提交说明：`fix: use physical sensor origin for registered cloud fusion`；可用该唯一说明查询提交，避免自引用 hash。
 - 后续：实机重新录包比较高程效果；先确认物理外参、输入时间与模式交接。未声称雷达视场/转圈/全部定位问题已解决。
+
+
+## 2026-11-04：提交剩余 raw 配置与量化复核
+
+- 用户明确要求提交此前保留的所有剩余改动；包含 raw YAML/launch 默认 map frame、core map_length=7.0、frame 回归测试、启动与参数说明。原有条目的历史测试结果保留，不改写为本轮实机验证。
+- 参数说明 core_config.md 原20 m示例同步为实际7 m；未再修改生产融合算法、门限或启动/停止一键脚本。
+- 新运行构建：colcon build --packages-select elevation_mapping_cupy --symlink-install，1包成功，总计1.41 s。
+- 新运行测试：semantic launch默认值、sensor origin callback/launch/GPU、raw elevation共23项通过，2.70 s。主工程Python52项通过，11.034 s。
+- 新运行实际ROS链路：隔离Domain144、localhost、CycloneDDS，注册点云到真实GPU再到GridMap，移动物理原点、拒绝TF不刷新时间3项检查通过，没有速度发布者。
+- 量化复核：旧包651帧中抽48帧，46帧有精确TF。原点偏差超过1 m的17帧，旧融合原点偏差中位5.207 m，新适配采用记录雷达TF；共同通过门限点的噪声模型方差中位2.136454→0.300119 m²。此值不是实测高度误差。合成GPU88格重复13帧，真值高度MAE15.339→0.0779 mm，新适配与原生传感器参考一致；不代表实机精度。
+- 完整数据、逐帧CSV、可复现程序及适用边界保存在主工程 docs/analysis/elevation_sensor_origin_2026-11-04/comparison.md。主工程路径 /home/nvidia/MPPI_3dnavi。
+- 之前完整colcon中6组缺libcudss.so.0导致失败仍未解决，本轮未重复全套。没有新实机导航包，不能评价转圈改善、覆盖率或总延迟。
+- 对应提交说明：fix: finalize gravity-aligned raw elevation configuration。
