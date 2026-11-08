@@ -309,3 +309,14 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 - 完整数据、逐帧CSV、可复现程序及适用边界保存在主工程 docs/analysis/elevation_sensor_origin_2026-11-04/comparison.md。主工程路径 /home/nvidia/MPPI_3dnavi。
 - 之前完整colcon中6组缺libcudss.so.0导致失败仍未解决，本轮未重复全套。没有新实机导航包，不能评价转圈改善、覆盖率或总延迟。
 - 对应提交说明：fix: finalize gravity-aligned raw elevation configuration。
+
+### 2026-11-08：修正 raw 高程图的滚动栅格中心发布
+
+- 完成目标：`publish_map()` 发布内部滚动栅格实际中心，而不是未按栅格量化的机器人连续位置；保持 `map` frame、7×7 m 地图、绝对 elevation 和单位朝向。地图仍按已有 0.1 m 网格步长跟随 `base_link` 平移。
+- 原因和范围：`move_to()` 按整格滚动，之前消息中心却直接使用 `_map_t.x/y`，每轴最多约半格偏差；这会使高程数据与消息位置不一致。它不能解释或证明用户看到的“菱形”外观；地图是否需要随航向旋转、视觉覆盖区域或 RViz 观察视角仍需进一步确认。
+- 修改文件：`elevation_mapping_cupy/elevation_mapping_node.py`；新增 `test/test_published_grid_center.py` 与隔离 ROS/GPU 验证 `test/check_grid_center_ros_gpu.py`；更新状态和经验。
+- 红绿测试：两个次格位移用例在原实现失败，修正后通过；中心发布、点云原点和 GridMap 布局定向测试共 16 项通过。扩展执行 35 项时 25 项通过、10 项旧 `test_map_shifting.py` 初始化出错：安装路径下找不到 weights.dat；使用源码优先路径复核后，旧测试还需要的 PyTorch 导入因已有 `libcudss.so.0` 缺失而失败。这不是本轮新引入的依赖，也未修改依赖栈。
+- 构建：容器内 `colcon build --packages-select elevation_mapping_cupy --symlink-install --executor sequential` 成功。
+- 实际 GPU/ROS 验证：隔离域 197 运行 `test/check_grid_center_ros_gpu.py`，真实 CuPy 高程节点接收测试点云和动态 TF；机器人位于 (0.04,-0.04) 时实收中心 (0,0)、634 个有效格，移动到 (0.06,-0.06) 后中心 (0.1,-0.1)、672 个有效格；消息 frame=map、范围 7×7 m、方向为单位四元数。此为合成输入验证，未运行实机导航或采集新实机截图。
+- 对应提交说明：`fix: publish the actual rolling grid center`。主导航仓库中的 `visualize: false` 用户修改保持不变。
+- 额外验证：在不修改生产代码或旧测试文件的前提下，将旧地图平移测试的 `Parameter.enable_traversability` 临时设为 false，使其使用当前 raw 模式；原有10项地图滚动测试全部通过。这仅验证非神经 raw 模式，默认神经后端的上述依赖缺失仍存在。
