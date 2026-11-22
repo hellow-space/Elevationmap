@@ -31,6 +31,7 @@ import rosbag2_py
 from elevation_mapping_cupy import ElevationMap, Parameter
 from elevation_mapping_cupy.elevation_mapping import GridGeometry
 from elevation_mapping_cupy.gridmap_utils import encode_layer_to_multiarray, decode_multiarray_to_rows_cols
+from elevation_mapping_cupy.pointcloud_geometry import sensor_frame_points
 
 PDC_DATATYPE = {
     "1": np.int8,
@@ -461,18 +462,12 @@ class ElevationMappingNode(Node):
         actual_map_length = (self._map.cell_n - 2) * self._map.resolution
         gm.info.length_x = actual_map_length
         gm.info.length_y = actual_map_length
-        if self._map_t is not None:
-            gm.info.pose.position.x = self._map_t.x
-            gm.info.pose.position.y = self._map_t.y
-            # grid_map_ros (and our RViz usage) treats GridMap as a horizontal 2.5D surface and ignores pose.z and
-            # pose.orientation. Foxglove's GridMap renderer *does* apply them, which can make the map appear tilted
-            # and shifted in Z when we embed the robot pose here. Keep pose.x/y as the map center in `map_frame`,
-            # but publish a neutral pose for visualization sanity.
-            gm.info.pose.position.z = 0.0
-        else:
-            gm.info.pose.position.x = float(center[0])
-            gm.info.pose.position.y = float(center[1])
-            gm.info.pose.position.z = 0.0
+        # Rolling shifts occur in whole cells; publish that same grid center.
+        # The continuous robot position can differ by up to half a cell.
+        gm.info.pose.position.x = float(center[0])
+        gm.info.pose.position.y = float(center[1])
+        # Elevation values already contain their absolute map-frame height.
+        gm.info.pose.position.z = 0.0
 
         gm.info.pose.orientation.x = 0.0
         gm.info.pose.orientation.y = 0.0
@@ -896,8 +891,46 @@ class ElevationMappingNode(Node):
         )
         self._image_process_counter += 1
 
+    def pointcloud_transform(self, source_frame, stamp, max_age):
+        """Nonblocking TF with a bounded latest fallback, including static TF."""
+        requested_ns = stamp.sec * 1_000_000_000 + stamp.nanosec
+        if requested_ns <= 0:
+            self.get_logger().warning('Rejecting cloud with invalid observation timestamp',
+                                      throttle_duration_sec=5.0)
+            return None
+        fallback = False
+        try:
+            try:
+                transform = self._tf_buffer.lookup_transform(self.map_frame, source_frame, stamp)
+            except (tf2.ExtrapolationException, tf2_ros.ExtrapolationException):
+                fallback = True
+                transform = self._tf_buffer.lookup_transform(
+                    self.map_frame, source_frame, rclpy.time.Time())
+        except (tf2.LookupException, tf2.ConnectivityException, tf2.ExtrapolationException):
+            self.get_logger().warning(
+                f'Rejecting cloud: TF {self.map_frame} <- {source_frame} unavailable',
+                throttle_duration_sec=5.0)
+            return None
+        actual = transform.header.stamp
+        actual_ns = actual.sec * 1_000_000_000 + actual.nanosec
+        # Static transforms succeed at the requested time. A latest-fallback
+        # stamp of zero can instead be stale dynamic data and must be bounded.
+        if fallback and not 0 <= requested_ns-actual_ns <= max_age*1e9:
+            self.get_logger().warning(
+                f"Rejecting cloud: TF {self.map_frame} <- {source_frame} is not within {max_age}s "
+                f"of its observation timestamp", throttle_duration_sec=5.0)
+            return None
+        if fallback:
+            self.get_logger().warning(
+                f'Cloud TF {self.map_frame} <- {source_frame}: using latest fallback '
+                f'{(requested_ns-actual_ns)*1e-9:.3f}s before observation',
+                throttle_duration_sec=5.0)
+        q = transform.transform.rotation
+        t = transform.transform.translation
+        return (quaternion_matrix([q.x, q.y, q.z, q.w])[:3, :3].astype(np.float32),
+                np.array([t.x, t.y, t.z], dtype=np.float32))
+
     def pointcloud_callback(self, msg: PointCloud2, sub_key: str) -> None:
-        self._last_t = msg.header.stamp
         additional_channels = list(self.param.subscriber_cfg[sub_key].get("channels", []))
         channels = ["x", "y", "z"] + additional_channels
 
@@ -957,28 +990,31 @@ class ElevationMappingNode(Node):
         if pts.size == 0:
             return
 
-        frame_sensor_id = msg.header.frame_id
-        if not frame_sensor_id:
+        cloud_frame = msg.header.frame_id
+        if not cloud_frame:
             raise ValueError("PointCloud2 header.frame_id is empty.")
-
-        if frame_sensor_id == self.map_frame:
-            t_np = np.zeros(3, dtype=np.float32)
-            R = np.eye(3, dtype=np.float32)
-        else:
-            transform_sensor_to_map = self.safe_lookup_transform(
-                self.map_frame,
-                frame_sensor_id,
-                msg.header.stamp,
-            )
-            if transform_sensor_to_map is None:
-                # Transform not available yet.
-                return
-            t = transform_sensor_to_map.transform.translation
-            q = transform_sensor_to_map.transform.rotation
-            t_np = np.array([t.x, t.y, t.z], dtype=np.float32)
-            R = quaternion_matrix([q.x, q.y, q.z, q.w])[:3, :3].astype(np.float32)
+        config = self.param.subscriber_cfg[sub_key]
+        sensor_frame = config.get('sensor_frame') or cloud_frame
+        max_age = float(config.get('max_tf_age', 0.2))
+        if not np.isfinite(max_age) or max_age <= 0:
+            raise ValueError('pointcloud max_tf_age must be finite and positive')
+        cloud_tf = self.pointcloud_transform(cloud_frame, msg.header.stamp, max_age)
+        if cloud_tf is None:
+            return
+        sensor_tf = (cloud_tf if sensor_frame == cloud_frame else
+                     self.pointcloud_transform(sensor_frame, msg.header.stamp, max_age))
+        if sensor_tf is None:
+            return
+        try:
+            pts, R, t_np = sensor_frame_points(pts, *cloud_tf, *sensor_tf)
+        except ValueError as error:
+            self.get_logger().warning(f'Rejecting cloud geometry: {error}', throttle_duration_sec=5.0)
+            return
+        if pts.size == 0:
+            return
 
         self._map.input_pointcloud(pts, channels, R, t_np, 0, 0)
+        self._last_t = msg.header.stamp
         self._pointcloud_process_counter += 1
 
     def pose_update(self) -> None:

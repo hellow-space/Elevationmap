@@ -181,13 +181,65 @@ Elevation Mapping 把 map frame 的 XY 平面视为水平面、Z 轴视为高度
 此外，当前 `ElevationLayer` 缓存 GridMap 后，直接用 master costmap 的世界坐标查询 GridMap 索引；源码没有 TF buffer、frame 一致性检查或坐标变换。因此它隐含假设 GridMap `header.frame_id` 与 local costmap `global_frame` 相同。`base_link` 只表示机器人位姿和 footprint，不是固定地图 frame。
 
 **解决方法：**
-先选择重力对齐的固定 frame，再令 raw GridMap 和 Nav2 local costmap 使用同一 frame。当前实机中 local costmap 的 `global_frame` 实测为 `map`，`map -> base_link` 的 roll/pitch 约 0°，而 `map -> camera_init` 含约 +33.97° pitch；因此 `map` 是当前已测得同时满足水平和 costmap 一致性的候选。将 raw GridMap 改回 `map` 后仍需实际运行并检查地图，验证成功前不把候选方案记为修复完成。若未来必须使用不同 global frame，应先为 bridge 增加并验证显式 TF 转换。
+先选择重力对齐的固定 frame，再令 raw GridMap 和 Nav2 local costmap 使用同一 frame。当前实机中 local costmap 的 `global_frame` 实测为 `map`，`map -> base_link` 的 roll/pitch 约 0°，而 `map -> camera_init` 含约 +33.97° pitch；因此 raw 默认 frame 已恢复为 `map`，点云仍可在 `camera_init`，由 TF 转换到 `map` 后建图。若未来必须使用不同 global frame，应先为 bridge 增加并验证显式 TF 转换。
 
 **验证：**
-逐段检查 `elevationCallback()`、`updateBounds()`、`updateCosts()` 和 `worldToGridMapIndex()` 的数据流，确认没有 frame 转换路径。Domain42/CycloneDDS 实测 `/cloud_registered` 与 GridMap header 都是 `camera_init`；GridMap pose orientation 为单位四元数；TF 连续采样得到 `camera_init -> base_link` pitch 约 -33.9°、`map -> camera_init` pitch 约 +33.97°、`map -> base_link` roll/pitch 约 0°；ROS 参数确认 local costmap `global_frame=map`、`robot_base_frame=base_link`。本阶段只定位原因，尚未切换 frame 后复测地图，也未运行 MPPI。
+逐段检查 `elevationCallback()`、`updateBounds()`、`updateCosts()` 和 `worldToGridMapIndex()` 的数据流，确认没有 frame 转换路径。Domain42/CycloneDDS 实测原 `/cloud_registered` 与 GridMap header 都是 `camera_init`；GridMap pose orientation 为单位四元数；TF 连续采样得到 `camera_init -> base_link` pitch 约 -33.9°、`map -> camera_init` pitch 约 +33.97°、`map -> base_link` roll/pitch 约 0°；ROS 参数确认 local costmap `global_frame=map`、`robot_base_frame=base_link`。修改后节点参数实收 `map_frame=map`、`corrected_map_frame=map`；真实点云恢复后实收 GridMap `frame=map`、单位 pose orientation 和 `elevation/variance` 两层，`map -> base_link` roll/pitch 约 0°，确认原约34°的坐标系假倾斜已从高程地图基准中移除。本阶段未运行 MPPI。
 
 **适用范围：**
 当前仓库的 `elevation_nav2_bridge::ElevationLayer`。
 
 **避免：**
 不要因为点云 header 是 `camera_init` 就直接把它用作高程地图 frame；必须先确认其 Z 轴是否与重力方向一致。不要让 GridMap 发布在 `camera_init`、local costmap 却使用 `map`，同时期待插件自动完成 TF 变换；也不要把滚动地图中心跟随 `base_link` 误解为地图发布在 `base_link`。原先仅根据话题 frame 将 raw GridMap 改为 `camera_init` 的结论已被本次实机 TF 测量推翻。
+
+
+## 注册点云的坐标系原点不能冒充当前传感器原点
+
+**日期：** 2026-11-04
+**相关模块：** elevation_mapping_cupy 点云输入、噪声和射线融合
+
+**现象：** 输入 `/cloud_registered` 已在固定 camera_init 坐标，原节点直接将 map←camera_init 的 R/t 传入融合。
+
+**原因：** GPU 同时把 raw XYZ 当作传感器相对距离、把 t 当作清理射线和高度门限的传感器起点；固定世界坐标表达不满足这一语义。
+
+**解决方法：** 显式配置 subscriber 的 `sensor_frame`，由 map←cloud 和 map←sensor 将点重新表达在当前传感器坐标，仍用既有 GPU API 传入 map←sensor。点的世界位置不变，物理原点和量测距离恢复正确。缺失/过旧 TF 拒绝融合且不刷新观测时间。
+
+**验证：** 18 项 callback/launch/真实 GPU 测试通过；原始传感器参考与注册点校正的高程/方差匹配，距离及 ramped-height 门限使用当前原点；独立域144实际发布 GridMap 并验证移动原点。完整包默认神经模式被缺失的 libcudss.so.0 阻断，记录于任务报告，不能称全包通过。
+
+**适用范围：** 原始传感器点云与已注册到世界系的点云混用；要求物理传感器 TF 外参正确。
+
+**避免：** 不要把 cloud header.frame_id 自动当成物理传感器位置；不要用无界 latest TF；不要以 stamp=0 推断 fallback 一定为静态；不要让被拒绝的观测刷新旧地图。该修正不补充物理视场盲区，也不代替上游时间同步。
+
+
+## 量化原点修正要分开噪声模型、合成误差和现场精度
+
+**日期：** 2026-11-04
+**相关模块：** 高程点云输入、离线对照
+
+**现象：** 机器人靠近固定注册点云原点时，新旧融合差异很小；远离原点后噪声和门限差异显著。
+
+**原因：** 旧距离随固定世界原点计算。全段统计会被长时间静止稀释；0.05×距离²仅为测量方差模型输出，不是地形高度真值误差。
+
+**解决方法：** 同一批记录点和TF进行配对比较，公开全段及明确位移条件子集；另用带真值的合成GPU实验与独立原生传感器参考比较，分别报告。
+
+**验证：** 旧包46个有效抽样帧，17帧原点偏差超过1 m；合成88格13次观测的原生参考与新适配高度/方差一致。数据保存在主工程高程对照报告。
+
+**适用范围：** 注册点云适配、模型方差及门限修正的效果评估。
+
+**避免：** 不将方差下降当作实际精度提升；不将采用TF后的零原点差称作零定位误差；不以离线可用TF证明实时TF健康；不把格数减少百分比当作总延迟减少百分比。
+
+## raw 高程图发布中心必须与实际滚动栅格一致
+
+**日期：** 2026-11-08
+
+**相关模块：** elevation_mapping_cupy / raw GridMap
+
+**现象：** 机器人在不足一格的距离内移动时，发布的地图中心跟随连续机器人位置，但内部栅格仍停在原位置，导致高程格对外位置偏差每轴最多约半格。
+
+**原因：** `move_to()` 将平移量按分辨率取整，而 `publish_map()` 原先把未经量化的 `_map_t.x/y` 写入 GridMap pose；HeightJump 和高程障碍层使用消息中心解算世界坐标。
+
+**解决方法：** 发布 `_get_map_center()` 返回的内部滚动中心，保持 map frame 的单位方向；不要把机器人位置直接冒充栅格中心。
+
+**验证：** 原代码在 ±4 cm 次格位移测试失败，修正后通过。隔离 ROS 域真实 GPU 融合测试：机器人从 `(0.04,-0.04)` 到 `(0.06,-0.06)`，实际 GridMap 中心从 `(0,0)` 按 0.1 m 步长跳到 `(0.1,-0.1)`，7×7 m、单位方向和有限高程层均确认。
+
+**适用范围：** 正常 raw 地图发布；可见区域受实际观测、NaN 和 RViz 视角影响，不能仅根据形状判断 GridMap 几何。

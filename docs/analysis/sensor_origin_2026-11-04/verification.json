@@ -1,0 +1,28 @@
+{
+  "initial_head": "4ea09a2895f747e484db294a2b0cc85c8e4784a9",
+  "branch": "fix/cloud-sensor-origin",
+  "checkpoint_main_repo": "3c59a62",
+  "focused_tests_passed": 18,
+  "package_build_passed": true,
+  "full_colcon_groups": 15,
+  "full_colcon_groups_failed": 6,
+  "full_colcon_test_result": {
+    "cases": 64,
+    "errors": 10,
+    "failures": 10,
+    "skipped": 0
+  },
+  "full_suite_blocker": "PyTorch import fails: libcudss.so.0 unavailable; neural-mode test nodes cannot start",
+  "mcap_available": false,
+  "raw_ros_smoke_domain": 144,
+  "raw_ros_smoke_passed": true,
+  "field_navigation_tested": false,
+  "source_sha256": {
+    "src/elevation_mapping_cupy/elevation_mapping_cupy/elevation_mapping_cupy/elevation_mapping_node.py": "74aa066215e8c2909ce4e4deecdd281e57898bed3f7b4e0662b98d61eeb69cf0",
+    "src/elevation_mapping_cupy/elevation_mapping_cupy/elevation_mapping_cupy/pointcloud_geometry.py": "5441b272aa585c0645e39cf431789f0d6297db919be5c93c4c5a5e1ccf58d012",
+    "src/elevation_mapping_cupy/elevation_mapping_cupy/launch/raw_elevation.launch.py": "c3faf8dbe4c817c622901c62cb59c151cceae1365b3b7486eb3d0a37e282afab",
+    "src/elevation_mapping_cupy/elevation_mapping_cupy/config/setups/raw/elevation.yaml": "d673cdb0476a89051972d58b2185d2830f2a7991f8bd7f2308d172bcd1b54fa6"
+  },
+  "original_user_status": " M EXPERIENCES.md\n M PROJECT_STATUS.md\n M RUN_RAW_ELEVATION.md\n M src/elevation_mapping_cupy/elevation_mapping_cupy/config/core/core_param.yaml\n M src/elevation_mapping_cupy/elevation_mapping_cupy/config/setups/raw/elevation.yaml\n M src/elevation_mapping_cupy/elevation_mapping_cupy/launch/raw_elevation.launch.py\n M src/elevation_mapping_cupy/elevation_mapping_cupy/test/test_semantic_launch_descriptions.py\n M src/terrain_test/RAW_ELEVATION.md\n?? src/elevation_mapping_cupy/elevation_mapping_cupy/config/core/core_config.md\n",
+  "original_user_patch_backup": "/tmp/elevation_sensor_origin_before/user_working_tree.patch"
+}

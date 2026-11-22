@@ -1,0 +1,10 @@
+{
+  "points": 18000,
+  "measured_runs": 200,
+  "cpu_adapter_ms": {
+    "p50": 1.3363014995775302,
+    "p95": 1.3729161495575681,
+    "max": 1.4323559989861678
+  },
+  "scope": "Synthetic CPU affine adapter only; excludes TF, DDS, parsing, GPU fusion and robot motion."
+}

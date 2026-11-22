@@ -48,14 +48,14 @@ def test_raw_mode_defaults_to_registered_cloud_with_height_layers():
     assert default_topic == "/cloud_registered"
 
 
-def test_raw_mode_defaults_to_camera_init_frame():
+def test_raw_mode_defaults_to_gravity_aligned_map_frame():
     package_root = Path(__file__).resolve().parents[1]
     config_path = package_root / "config" / "setups" / "raw" / "elevation.yaml"
     config = YAML(typ="safe").load(config_path.read_text(encoding="utf-8"))
     params = config["/elevation_mapping_node"]["ros__parameters"]
 
-    assert params["map_frame"] == "camera_init"
-    assert params["corrected_map_frame"] == "camera_init"
+    assert params["map_frame"] == "map"
+    assert params["corrected_map_frame"] == "map"
 
     launch_description = load_launch(package_root / "launch" / "raw_elevation.launch.py")
     frame_argument = next(
@@ -64,4 +64,4 @@ def test_raw_mode_defaults_to_camera_init_frame():
         if isinstance(entity, DeclareLaunchArgument) and entity.name == "map_frame"
     )
     default_frame = perform_substitutions(LaunchContext(), frame_argument.default_value)
-    assert default_frame == "camera_init"
+    assert default_frame == "map"

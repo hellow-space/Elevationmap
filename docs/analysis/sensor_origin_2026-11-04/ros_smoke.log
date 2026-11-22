@@ -1,0 +1,8 @@
+1793787263.177081 [144]    python3: selected interface "lo" is not multicast-capable: disabling multicast
+[INFO] [1793787263.416017023] [elevation_mapping_node]: Raw elevation mode: neural weights/inference and traversability-based drift compensation disabled.
+[INFO] [1793787263.553981246] [elevation_mapping_node]: Initialized map with length: 7.0, resolution: 0.1, cells: 72
+Loaded plugins are
+PASS: registered cloud -> physical origin -> actual GPU fusion -> GridMap
+PASS: sensor origin follows motion while fixed world points stay fixed
+[WARN] [1793787268.789976870] [elevation_mapping_node]: Rejecting cloud: TF review_map <- missing_frame unavailable
+PASS: rejected TF does not fuse or refresh accepted observation time

@@ -1,8 +1,8 @@
 /elevation_mapping_node:
   ros__parameters:
-    map_frame: camera_init
+    map_frame: map
     base_frame: base_link
-    corrected_map_frame: camera_init
+    corrected_map_frame: map
     enable_traversability: false
     enable_drift_compensation: false
     use_initializer_at_start: false
@@ -10,6 +10,8 @@
       depth:
         topic_name: /cloud_registered
         data_type: pointcloud
+        sensor_frame: livox_frame
+        max_tf_age: 0.2
     publishers:
       elevation_map:
         layers: [elevation, variance]

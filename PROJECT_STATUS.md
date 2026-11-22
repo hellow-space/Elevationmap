@@ -1,12 +1,28 @@
 # 四轮足机器人地形评估
 
-## 2026-11-22：为 main 分支补充仓库 README
+## 2026-11-22：为 main 分支补充仓库 README（合并前）
 
 - 完成目标：新增根目录 `README.md`，说明项目范围、Humble 模块、`main` 与 `fix/cloud-sensor-origin` 的差异及 `main` 的 raw 入口。
 - 核对依据：`main` 分支配置中的 `map_frame` 和 `corrected_map_frame` 均为 `camera_init`；诊断记录指出该 frame 倾斜约 34°，与 local costmap 的 `map` frame 不一致。README 明确标注本分支未包含后续传感器原点和地图 frame 修复。
 - 验证：检查 README 中的分支/配置描述与当前提交源码、状态记录相符；运行 `git diff --check`。未运行构建、算法测试或 ROS 实验（纯文档改动）。
-- 当前问题：`main` 的 raw 默认 frame 仍为 `camera_init`，使用时应理解其诊断基线属性。
 - 对应提交说明：`docs: add main branch README`。
+
+## 2026-11-22：为 fix/cloud-sensor-origin 分支补充仓库 README
+
+- 完成目标：新增根目录 `README.md`，具体说明物理传感器原点、重力对齐 raw frame、滚动栅格中心三项修复，并链接现有验证证据。
+- 核对依据：对照 `docs/SENSOR_ORIGIN_FIX.md`、raw launch/YAML、滚动中心实现及本状态文档。README 保留完整 `colcon test` 因缺少 `libcudss.so.0` 有失败、尚无新实机导航验证等边界。
+- 验证：检查 README 中的分支、配置、验证结果及链接文件；运行 `git diff --check`。未运行构建、算法测试或 ROS 实验（纯文档改动）。
+- 当前问题：实机录包后的高程质量、导航稳定性和端到端延迟仍待验证；本任务不改变此状态。
+- 对应提交说明：`docs: add sensor origin branch README`。
+
+## 2026-11-22：将 fix/cloud-sensor-origin 合入 main
+
+- 完成目标：把物理传感器原点处理、raw 地图 `map` frame、滚动栅格中心修正及其验证证据合入 `main`。修复分支保留为历史来源分支。
+- README：以 `main` 当前集成状态为准，记录默认 frame、传感器 frame、启动入口和验证边界；修复分支保留自己的分支说明。
+- 构建：在全新临时 worktree 执行 `colcon --log-base /tmp/elevation-map-main-merge/log build --base-paths src --packages-up-to elevation_mapping_cupy --symlink-install --build-base /tmp/elevation-map-main-merge/build --install-base /tmp/elevation-map-main-merge/install --event-handlers console_direct+`，`elevation_map_msgs`、`semantic_sensor`、`elevation_mapping_cupy` 三包完成。只选择目标包的首次构建因隔离安装目录缺少两个依赖而未启动，改用 `--packages-up-to` 后成功。
+- 测试：代码修复在来源分支已有定向测试和隔离 ROS/GPU 验证记录，本次合并未修改其源码。额外启动的整包 `colcon test` 在约2分钟后中断，包状态为 aborted；日志中默认神经后端因 PyTorch 缺少 `libcupti.so.12` 不能导入。此测试未完成，不能记为通过。本次未重复实机 topic/RViz 实验。
+- 当前问题：实机新录包后的地形质量、导航行为和端到端延迟仍待验证；默认神经模式测试依赖 `libcupti.so.12` 的环境问题仍存在。
+- 对应提交说明：`Merge branch 'fix/cloud-sensor-origin' into main`。
 
 更新日期：2026-09-19
 
@@ -50,7 +66,7 @@ git -c safe.directory=/root/elevation_map status --short
 ros2 launch elevation_mapping_cupy raw_elevation.launch.py
 ```
 
-默认真实点云输入为 `/cloud_registered`，GridMap frame 为 `camera_init`，机器人 frame 为 `base_link`；也可用 launch 参数覆盖。没有真实输入时使用测试入口必须显式将话题覆盖回 `/camera/depth/points`。本次历史测试两端用 Domain43 / CycloneDDS；真实数据源应沿用其 Domain。默认容器不启动 RViz，主机加载 `/tmp/raw_elevation.rviz`。详细命令、接入参数、raw 边界和高程/方差切换见 `src/terrain_test/RAW_ELEVATION.md`。
+默认真实点云输入为 `/cloud_registered`，GridMap frame 为重力对齐且与 local costmap 一致的 `map`，机器人 frame 为 `base_link`；点云自身仍可使用 `camera_init`，由 TF 转换后参与建图。也可用 launch 参数覆盖。没有真实输入时使用测试入口必须显式将话题覆盖回 `/camera/depth/points`。本次历史测试两端用 Domain43 / CycloneDDS；真实数据源应沿用其 Domain。默认容器不启动 RViz，主机加载 `/tmp/raw_elevation.rviz`。详细命令、接入参数、raw 边界和高程/方差切换见 `src/terrain_test/RAW_ELEVATION.md`。
 
 当前运行中：容器 raw launch 当时 PID1460299（子节点1460357/1460359），主机 RViz 当时 PID3141037。操作前必须核对命令行，勿凭历史 PID 杀进程；旧 geometry_demo 已停止。
 
@@ -76,6 +92,8 @@ ros2 launch elevation_mapping_cupy synthetic_depth_demo.launch.py launch_rviz:=f
 - 当前 demo 没有直接发布 `slope`、`roughness` 层。
 
 ## 目标与待办
+
+- [x] 将 raw 高程 GridMap 默认 frame 从实机中倾斜约34°的 `camera_init` 恢复为重力对齐、并与 local costmap 一致的 `map`。提交说明：`fix: use gravity-aligned frame for raw elevation`。
 
 - [x] 新增宿主机进入现有 Docker、加载 Humble/工作空间环境并启动真实 raw 高程图的独立操作文档。提交说明：`docs: add raw elevation Docker startup guide`。
 
@@ -277,3 +295,52 @@ python3 src/terrain_test/geometry_validation/validate_geometry.py --mutation-che
 - 实际命令：Domain42/CycloneDDS 下检查 point cloud/GridMap header 与 GridMap pose，运行 `tf2_echo camera_init base_link`、`tf2_echo map camera_init`、`tf2_echo map base_link`，并读取 `/local_costmap/local_costmap` frame 参数和 `/tf`、`/tf_static` 发布链。
 - 未运行：未重启高程节点、未切换 map frame、未运行 build/test 或 MPPI。
 - 对应提交说明：`docs: diagnose tilted elevation frame`。
+
+### 2026-09-20：raw 高程恢复重力对齐的 map frame
+
+- 完成目标：raw YAML 的 `map_frame`、`corrected_map_frame` 与 raw launch 默认 `map_frame` 从倾斜的 `camera_init` 恢复为 `map`；输入仍为 `/cloud_registered`，`base_frame=base_link`，输出仍只有 `elevation/variance`。同步更新启动和 raw 使用文档。
+- TDD：先将真实 YAML 和 launch 默认值的回归测试改为期望 `map`，测试因实际值仍为 `camera_init` 按预期失败；修改两个配置入口后目标测试通过。
+- 构建：`colcon build --packages-select elevation_mapping_cupy --symlink-install --event-handlers console_direct+` 成功，1 package finished。
+- 完整测试：第一次在容器全局 Domain42 执行时，3个 ROS launch 测试收到了正在运行的实机节点数据而失败；证据包括 synthetic 测试在自身节点初始化前收到 `camera_init` 消息。改用空闲 Domain97 分项复跑确认 TF/GridMap 和 synthetic 测试通过、地图保存仍仅因已知的 `rosbag2_storage_mcap` 缺失失败；最终在空闲 Domain96 完整重跑，12个 CTest 目标中11个通过，唯一失败为该地图保存依赖。
+- 运行验证：Domain42 启动新 raw 节点，参数实收 `map_frame=map`、`corrected_map_frame=map`、`base_frame=base_link`，订阅 `/cloud_registered` 并提供 GridMap publisher。真实点云恢复后，`check_raw_elevation.py` 实收 GridMap `frame=map`、layers=`elevation,variance`、分辨率0.1m、1420个有效格；当帧高度范围约-0.435565～1.172765m、方差范围约0.00159661～2.63681m²。GridMap pose orientation为单位四元数，实时 `map -> base_link` roll/pitch约0°，确认原约34°的坐标系假倾斜已从地图基准中移除。
+- 隔离消息验证：Domain99 使用 raw launch 测试输入，`check_raw_elevation.py` 实收 GridMap `frame=map`、layers=`elevation,variance`、分辨率0.1m、5723个有效格；高度范围0～0.397067m、方差范围约0.000153485～0.0170613m²。测试节点随后正常停止；Domain42的新 raw节点保留运行等待真实点云和TF恢复。
+- 当前问题：尚未保存新的RViz截图或运行Nav2/MPPI；当帧高度范围包含真实地形与障碍物，不能仅凭最大最小值评价几何精度。
+- 对应提交说明：`fix: use gravity-aligned frame for raw elevation`。
+
+
+## 2026-11-04：注册点云使用当前物理传感器原点
+
+- 目标：修复 `/cloud_registered` 的固定坐标原点被误用为当前雷达原点；不改 CUDA/MPPI/FAST-LIVO 或增加激进裁点。
+- 分支：`fix/cloud-sensor-origin`，开始 HEAD `4ea09a2`。已有用户配置/文档改动原样保留；仅暂存本轮增量。
+- 修改：新增 `pointcloud_geometry.py`，在节点中区分 cloud frame 和 sensor frame、保留地图几何、使用物理原点进行噪声/距离/高度/射线融合；有界 TF fallback 告警，失败不更新观测时间。raw 真实传感器默认 livox_frame，测试生成器使用 base_frame。
+- 验证：容器内 `colcon build --packages-select elevation_mapping_cupy --symlink-install` 成功；18 项 callback/launch/实际 GPU 用例通过；独立域144的 PointCloud2→TF→GPU→GridMap 流程、移动原点和拒绝帧不刷新时间均通过。
+- 性能：18000 点 CPU 适配 P50 1.336 ms、P95 1.373 ms（200 次），不含 TF/DDS/GPU，不代表实机总时延。
+- 完整测试：`colcon test --packages-select elevation_mapping_cupy` 已运行，15 组中6组失败，64 用例中10 errors/10 failures，均与默认神经模式导入 PyTorch 缺 `libcudss.so.0` 及其节点启动失败有关。raw 模式新测试通过，不把整包描述为全通过。MCAP storage 也未安装，但本轮保存测试尚未到达存储阶段。
+- 已验证独立审查意见已修正：零时间动态 TF 不可冒充静态 TF，recent latest fallback 必须告警。已有 ros2_numpy intensity 解码问题单独记录，raw XYZ 不走该分支。
+- 证据与复现：`docs/SENSOR_ORIGIN_FIX.md` 与 `docs/analysis/sensor_origin_2026-11-04/`。
+- 提交说明：`fix: use physical sensor origin for registered cloud fusion`；可用该唯一说明查询提交，避免自引用 hash。
+- 后续：实机重新录包比较高程效果；先确认物理外参、输入时间与模式交接。未声称雷达视场/转圈/全部定位问题已解决。
+
+
+## 2026-11-04：提交剩余 raw 配置与量化复核
+
+- 用户明确要求提交此前保留的所有剩余改动；包含 raw YAML/launch 默认 map frame、core map_length=7.0、frame 回归测试、启动与参数说明。原有条目的历史测试结果保留，不改写为本轮实机验证。
+- 参数说明 core_config.md 原20 m示例同步为实际7 m；未再修改生产融合算法、门限或启动/停止一键脚本。
+- 新运行构建：colcon build --packages-select elevation_mapping_cupy --symlink-install，1包成功，总计1.41 s。
+- 新运行测试：semantic launch默认值、sensor origin callback/launch/GPU、raw elevation共23项通过，2.70 s。主工程Python52项通过，11.034 s。
+- 新运行实际ROS链路：隔离Domain144、localhost、CycloneDDS，注册点云到真实GPU再到GridMap，移动物理原点、拒绝TF不刷新时间3项检查通过，没有速度发布者。
+- 量化复核：旧包651帧中抽48帧，46帧有精确TF。原点偏差超过1 m的17帧，旧融合原点偏差中位5.207 m，新适配采用记录雷达TF；共同通过门限点的噪声模型方差中位2.136454→0.300119 m²。此值不是实测高度误差。合成GPU88格重复13帧，真值高度MAE15.339→0.0779 mm，新适配与原生传感器参考一致；不代表实机精度。
+- 完整数据、逐帧CSV、可复现程序及适用边界保存在主工程 docs/analysis/elevation_sensor_origin_2026-11-04/comparison.md。主工程路径 /home/nvidia/MPPI_3dnavi。
+- 之前完整colcon中6组缺libcudss.so.0导致失败仍未解决，本轮未重复全套。没有新实机导航包，不能评价转圈改善、覆盖率或总延迟。
+- 对应提交说明：fix: finalize gravity-aligned raw elevation configuration。
+
+### 2026-11-08：修正 raw 高程图的滚动栅格中心发布
+
+- 完成目标：`publish_map()` 发布内部滚动栅格实际中心，而不是未按栅格量化的机器人连续位置；保持 `map` frame、7×7 m 地图、绝对 elevation 和单位朝向。地图仍按已有 0.1 m 网格步长跟随 `base_link` 平移。
+- 原因和范围：`move_to()` 按整格滚动，之前消息中心却直接使用 `_map_t.x/y`，每轴最多约半格偏差；这会使高程数据与消息位置不一致。它不能解释或证明用户看到的“菱形”外观；地图是否需要随航向旋转、视觉覆盖区域或 RViz 观察视角仍需进一步确认。
+- 修改文件：`elevation_mapping_cupy/elevation_mapping_node.py`；新增 `test/test_published_grid_center.py` 与隔离 ROS/GPU 验证 `test/check_grid_center_ros_gpu.py`；更新状态和经验。
+- 红绿测试：两个次格位移用例在原实现失败，修正后通过；中心发布、点云原点和 GridMap 布局定向测试共 16 项通过。扩展执行 35 项时 25 项通过、10 项旧 `test_map_shifting.py` 初始化出错：安装路径下找不到 weights.dat；使用源码优先路径复核后，旧测试还需要的 PyTorch 导入因已有 `libcudss.so.0` 缺失而失败。这不是本轮新引入的依赖，也未修改依赖栈。
+- 构建：容器内 `colcon build --packages-select elevation_mapping_cupy --symlink-install --executor sequential` 成功。
+- 实际 GPU/ROS 验证：隔离域 197 运行 `test/check_grid_center_ros_gpu.py`，真实 CuPy 高程节点接收测试点云和动态 TF；机器人位于 (0.04,-0.04) 时实收中心 (0,0)、634 个有效格，移动到 (0.06,-0.06) 后中心 (0.1,-0.1)、672 个有效格；消息 frame=map、范围 7×7 m、方向为单位四元数。此为合成输入验证，未运行实机导航或采集新实机截图。
+- 对应提交说明：`fix: publish the actual rolling grid center`。主导航仓库中的 `visualize: false` 用户修改保持不变。
+- 额外验证：在不修改生产代码或旧测试文件的前提下，将旧地图平移测试的 `Parameter.enable_traversability` 临时设为 false，使其使用当前 raw 模式；原有10项地图滚动测试全部通过。这仅验证非神经 raw 模式，默认神经后端的上述依赖缺失仍存在。

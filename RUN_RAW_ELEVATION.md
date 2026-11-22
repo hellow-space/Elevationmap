@@ -20,5 +20,5 @@ exec ros2 launch elevation_mapping_cupy raw_elevation.launch.py
 
 - 输入：`/cloud_registered`
 - 输出：`/elevation_mapping_node/elevation_map`
-- GridMap frame：`camera_init`
+- GridMap frame：`map`
 - 数据层：`elevation`、`variance`
