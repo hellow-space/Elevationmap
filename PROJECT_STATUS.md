@@ -1,5 +1,13 @@
 # 四轮足机器人地形评估
 
+## 2026-11-22：为 fix/cloud-sensor-origin 分支补充仓库 README
+
+- 完成目标：新增根目录 `README.md`，具体说明物理传感器原点、重力对齐 raw frame、滚动栅格中心三项修复，并链接现有验证证据。
+- 核对依据：对照 `docs/SENSOR_ORIGIN_FIX.md`、raw launch/YAML、滚动中心实现及本状态文档。README 保留完整 `colcon test` 因缺少 `libcudss.so.0` 有失败、尚无新实机导航验证等边界。
+- 验证：检查 README 中的分支、配置、验证结果及链接文件；运行 `git diff --check`。未运行构建、算法测试或 ROS 实验（纯文档改动）。
+- 当前问题：实机录包后的高程质量、导航稳定性和端到端延迟仍待验证；本任务不改变此状态。
+- 对应提交说明：`docs: add sensor origin branch README`。
+
 更新日期：2026-09-19
 
 ## 接手时先看这里
