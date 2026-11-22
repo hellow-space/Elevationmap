@@ -1,5 +1,13 @@
 # 四轮足机器人地形评估
 
+## 2026-11-22：为 main 分支补充仓库 README
+
+- 完成目标：新增根目录 `README.md`，说明项目范围、Humble 模块、`main` 与 `fix/cloud-sensor-origin` 的差异及 `main` 的 raw 入口。
+- 核对依据：`main` 分支配置中的 `map_frame` 和 `corrected_map_frame` 均为 `camera_init`；诊断记录指出该 frame 倾斜约 34°，与 local costmap 的 `map` frame 不一致。README 明确标注本分支未包含后续传感器原点和地图 frame 修复。
+- 验证：检查 README 中的分支/配置描述与当前提交源码、状态记录相符；运行 `git diff --check`。未运行构建、算法测试或 ROS 实验（纯文档改动）。
+- 当前问题：`main` 的 raw 默认 frame 仍为 `camera_init`，使用时应理解其诊断基线属性。
+- 对应提交说明：`docs: add main branch README`。
+
 更新日期：2026-09-19
 
 ## 接手时先看这里
